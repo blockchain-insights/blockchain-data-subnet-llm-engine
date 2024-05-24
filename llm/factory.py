@@ -2,6 +2,7 @@ from llm.base_llm import BaseLLM
 from llm.custom import CustomLLM
 from llm.openai import OpenAILLM
 from protocol import LLM_TYPE_CUSTOM, LLM_TYPE_OPENAI
+from settings import settings
 
 
 class LLMFactory:
@@ -16,4 +17,4 @@ class LLMFactory:
         if llm_class is None:
             raise ValueError(f"Unsupported LLM Type: {llm_type}")
 
-        return llm_class()
+        return llm_class(settings=settings)

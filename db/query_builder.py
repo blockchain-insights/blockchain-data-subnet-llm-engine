@@ -57,7 +57,7 @@ class QueryBuilder:
                     cypher_query += 'WHERE ' + ' AND '.join(conditionals)
 
                 cypher_query += '\n'
-                cypher_query += f'RETURN t'
+                cypher_query += f'RETURN *'
                 cypher_query += '\n'
                 cypher_query += f'LIMIT {query.limit}'
                 cypher_query += ';'

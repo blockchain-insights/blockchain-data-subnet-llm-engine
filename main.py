@@ -46,7 +46,7 @@ v1_router = APIRouter()
 
 @v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=QueryOutput)
 async def llm_query_v1(
-        request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "What is the balance of address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"}]}),
+        request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "Return 15 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
         graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
 

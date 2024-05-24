@@ -3,11 +3,12 @@ from typing import List, Dict, Any
 
 from llm.base_llm import BaseLLM
 from protocol import LlmMessage, Query
+from settings import Settings
 
 
 class CustomLLM(BaseLLM, ABC):
-    def __init__(self, model_name: str) -> None:
-        pass
+    def __init__(self, settings: Settings) -> None:
+        super().__init__(settings)
 
     def build_query_from_messages(self, llm_messages: List[LlmMessage]) -> Query:
         pass
