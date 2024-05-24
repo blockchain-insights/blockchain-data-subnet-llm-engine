@@ -11,14 +11,13 @@ from protocol import LlmMessage, Query, LLM_MESSAGE_TYPE_USER, NETWORK_BITCOIN, 
 from loguru import logger
 from langchain_community.graphs import MemgraphGraph
 
+from settings import Settings
+
 
 class OpenAILLM(BaseLLM):
-    def __init__(self) -> None:
-        api_key = os.getenv("OPENAI_API_KEY") or ""
-        if not api_key:
-            raise Exception("OpenAI_API_KEY is not set.")
-
-        self.chat = ChatOpenAI(api_key=api_key, model="gpt-4", temperature=0)
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        self.chat = ChatOpenAI(api_key=settings.OPEN_AI_KEY, model="gpt-4", temperature=0)
 
     def build_query_from_messages(self, llm_messages: List[LlmMessage]) -> Query:
         messages = [
@@ -84,20 +83,16 @@ class OpenAILLM(BaseLLM):
             else:
                 return ai_message.content
         except Exception as e:
-            bt.logging.error(f"LlmQuery general response error: {e}")
+            logger.error(f"LlmQuery general response error: {e}")
             raise Exception(LLM_ERROR_GENERAL_RESPONSE_FAILED)
 
     def generate_llm_query_from_query(self, query: Query) -> str:
         pass
 
     def excute_generic_query(self, llm_message: str) -> str:
-        # Note: Getting Graph_db url, user, and password
-        graph_db_url = os.environ.get("GRAPH_DB_URL") or "bolt://localhost:7687"
-        graph_db_user = os.environ.get("GRAPH_DB_USER") or ""
-        graph_db_password = os.environ.get("GRAPH_DB_PASSWORD") or ""
-
-        # Note: Loading the memgraph
-        graph = MemgraphGraph(url=graph_db_url, username=graph_db_user, password=graph_db_password)
+        graph = MemgraphGraph(url=self.settings.GRAPH_DB_URL,
+                              username=self.settings.GRAPH_DB_USER,
+                              password=self.settings.GRAPH_DB_PASSWORD)
 
         # Note: Creating the GraphCypherQAChain
         chain = MemgraphCypherQAChain.from_llm(ChatOpenAI(temperature=0.7), graph=graph, return_intermediate_steps=True,

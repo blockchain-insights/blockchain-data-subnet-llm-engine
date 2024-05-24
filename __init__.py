@@ -7,6 +7,8 @@ without the express permission of Blockchain Insights.
 
 """
 
+
+
 __version__ = "0.1.1"
 version_split = __version__.split(".")
 __spec_version__ = (
