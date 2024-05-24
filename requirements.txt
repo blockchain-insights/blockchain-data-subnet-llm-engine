@@ -1,0 +1,7 @@
+fastapi~=0.111.0
+pydantic
+loguru
+gqlalchemy
+langchain
+langchain-openai
+langchain_community
