@@ -3,14 +3,18 @@ from typing import List
 
 from loguru import logger
 import sys
-from fastapi import FastAPI, Request, Depends
-from pydantic import BaseModel
+from fastapi import FastAPI, Request, Depends, Query, Path, Body, APIRouter
+from pydantic import BaseModel, Field
 
+import __init__
 from db.graph_search import GraphSearchFactory
 from llm.factory import LLMFactory
 from protocol import QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LlmMessage, LLM_ERROR_MESSAGES
 
-app = FastAPI()
+app = FastAPI(
+    title="Blockchain Insights LLM ENGINE",
+    description="API designed to execute user prompts related to blockchain queries using LLM agents. It integrates with different LLMs and graph search functionalities to process and interpret blockchain data.",
+    version=__init__.__version__,)
 
 logger.remove()  # Remove the default logger
 logger.add(sys.stdout, format="{time} {level} {message}", level="INFO")
@@ -24,7 +28,6 @@ def get_graph_search_factory() -> GraphSearchFactory:
     return GraphSearchFactory()
 
 
-# Add a request logging middleware
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.info(f"New request: {request.method} {request.url}")
@@ -33,21 +36,23 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-# Define request body model
-class LLMQueryRequest(BaseModel):
-    llm_type: str
-    network: str
-    # messages: conversation history for llm agent to use as context
-    messages: List[LlmMessage] = None
+class LLMQueryRequestV1(BaseModel):
+    llm_type: str = Field(default="openai", title="The type of the llm agent")
+    network: str = Field(default="bitcoin", title="The network to query")
+    messages: List[LlmMessage] = Field(default=[], title="The conversation history for llm agent to use as context")
 
-@app.post("/llm_query")
-async def llm_query(request: LLMQueryRequest,
-                    llm_factory: LLMFactory = Depends(get_llm_factory),
-                    graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
+
+v1_router = APIRouter()
+
+@v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=QueryOutput)
+async def llm_query_v1(
+        request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "What is the balance of address 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"}]}),
+        llm_factory: LLMFactory = Depends(get_llm_factory),
+        graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
 
     logger.info(f"llm query received: {request.llm_type}, network: {request.network}")
 
-    output = {}
+    output = QueryOutput()
 
     try:
         llm = llm_factory.create_llm(request.llm_type)
@@ -81,3 +86,5 @@ async def llm_query(request: LLMQueryRequest,
     logger.info(f"Serving miner llm query output: {output}")
 
     return output
+
+app.include_router(v1_router, prefix="/v1")

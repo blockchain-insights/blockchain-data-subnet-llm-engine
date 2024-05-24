@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 ERROR_TYPE = int
 LLM_TYPE_OPENAI = "openai"
@@ -45,9 +45,10 @@ LLM_ERROR_MESSAGES = {
 # NETWORKS
 NETWORK_BITCOIN = "bitcoin"
 
+
 class LlmMessage(BaseModel):
-    type: int = None
-    content: str = None
+    type: int = Field(0, title="The type of the message")
+    content: str = Field("", title="The content of the message")
 
 
 class QueryOutput(BaseModel):
