@@ -10,10 +10,9 @@ from langchain_core.language_models import BaseLanguageModel
 from langchain_core.prompts import BasePromptTemplate
 from langchain_core.pydantic_v1 import Field
 
-from langchain.chains.base import Chain
 from langchain.chains import GraphCypherQAChain
-from langchain.chains.graph_qa.cypher_utils import CypherQueryCorrector, Schema
-from langchain.chains.graph_qa.prompts import CYPHER_GENERATION_PROMPT, CYPHER_QA_PROMPT
+from langchain_community.chains.graph_qa.cypher_utils import CypherQueryCorrector, Schema
+from langchain_community.chains.graph_qa.prompts import CYPHER_GENERATION_PROMPT, CYPHER_QA_PROMPT
 from langchain.chains.llm import LLMChain
 
 INTERMEDIATE_STEPS_KEY = "intermediate_steps"

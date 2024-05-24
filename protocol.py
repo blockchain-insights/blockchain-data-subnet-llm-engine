@@ -23,6 +23,25 @@ LLM_ERROR_QUERY_BUILD_FAILED = 7
 LLM_ERROR_GENERAL_RESPONSE_FAILED = 8
 LLM_ERROR_NOT_APPLICAPLE_QUESTIONS = 9
 
+# Query Types
+QUERY_TYPE_SEARCH = "search"
+QUERY_TYPE_FLOW = "flow"
+QUERY_TYPE_AGGREGATION = "aggregation"
+
+# LLM Error Messages
+LLM_ERROR_MESSAGES = {
+    LLM_ERROR_NO_ERROR: "No Error",
+    LLM_ERROR_TYPE_NOT_SUPPORTED: "Not supported query type",
+    LLM_ERROR_SEARCH_TARGET_NOT_SUPPORTED: "Please let us know what you want to search.",
+    LLM_ERROR_SEARCH_LIMIT_NOT_SPECIFIED: "Because there are too many results, you need to let us know how many results you want to get.",
+    LLM_ERROR_SEARCH_LIMIT_EXCEEDED: "We cannot provide that many results.",
+    LLM_ERROR_INTERPRETION_FAILED: "Unexpected error occurs while interpreting results.",
+    LLM_ERROR_EXECUTION_FAILED: "Unexpected error occurs during database interaction.",
+    LLM_ERROR_QUERY_BUILD_FAILED: "Unexpected error occurs while inferencing AI models.",
+    LLM_ERROR_GENERAL_RESPONSE_FAILED: "Unexpected error occurs while answering general questions.",
+    LLM_ERROR_NOT_APPLICAPLE_QUESTIONS: "Your question is not applicable to our subnet. We only answer questions related blockchain or cryptocurrency."
+}
+
 # NETWORKS
 NETWORK_BITCOIN = "bitcoin"
 
