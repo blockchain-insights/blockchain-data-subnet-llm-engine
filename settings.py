@@ -19,3 +19,10 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+print("Settings:")
+print(settings.dict())
+print(settings.LLM_TYPE)
+print(settings.OPEN_AI_KEY)
+print(settings.GRAPH_DB_URL)
+print(settings.GRAPH_DB_USER)
+print(settings.GRAPH_DB_PASSWORD)
