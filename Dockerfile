@@ -25,6 +25,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all remaining project files to the working directory
 COPY . .
 
+# Make all scripts executable
+RUN chmod +rwx scripts/*
+
 # Install the project package itself
 RUN pip install --no-cache-dir .
 
