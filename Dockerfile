@@ -31,3 +31,6 @@ RUN chmod +rwx scripts/*
 # Install the project package itself
 RUN pip install --no-cache-dir .
 
+# Expose port 8000 for FastAPI
+EXPOSE 8000
+
