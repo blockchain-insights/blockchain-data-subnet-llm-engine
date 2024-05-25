@@ -7,7 +7,6 @@ load_dotenv()
 
 class Settings(BaseSettings):
     LLM_TYPE: str
-    NETWORK: str
     OPEN_AI_KEY: str
     GRAPH_DB_URL: str
     GRAPH_DB_USER: str
