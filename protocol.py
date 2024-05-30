@@ -52,6 +52,7 @@ class LlmMessage(BaseModel):
 
 
 class QueryOutput(BaseModel):
+    type: str = "graph"
     result: Optional[List[Dict]] = None
     interpreted_result: Optional[str] = None
     error: Optional[ERROR_TYPE] = None

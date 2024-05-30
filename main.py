@@ -2,7 +2,6 @@ import traceback
 from typing import List
 
 from loguru import logger
-import sys
 from fastapi import FastAPI, Request, Depends, Query, Path, Body, APIRouter
 from pydantic import BaseModel, Field
 
@@ -15,9 +14,6 @@ app = FastAPI(
     title="Blockchain Insights LLM ENGINE",
     description="API designed to execute user prompts related to blockchain queries using LLM agents. It integrates with different LLMs and graph search functionalities to process and interpret blockchain data.",
     version=__init__.__version__,)
-
-logger.remove()  # Remove the default logger
-logger.add(sys.stdout, format="{time} {level} {message}", level="INFO")
 
 
 def get_llm_factory() -> LLMFactory:
@@ -44,7 +40,7 @@ class LLMQueryRequestV1(BaseModel):
 
 v1_router = APIRouter()
 
-@v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=QueryOutput)
+@v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=List[QueryOutput])
 async def llm_query_v1(
         request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "Return 15 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
@@ -52,7 +48,8 @@ async def llm_query_v1(
 
     logger.info(f"llm query received: {request.llm_type}, network: {request.network}")
 
-    output = QueryOutput()
+    output = None
+
     llm = llm_factory.create_llm(request.llm_type)
 
     try:
@@ -63,7 +60,11 @@ async def llm_query_v1(
         result = graph_search.execute_query(query=query)
         interpreted_result = llm.interpret_result(llm_messages=request.messages, result=result)
 
-        output = QueryOutput(result=result, interpreted_result=interpreted_result)
+        output = [
+            QueryOutput(type="graph", result=result, interpreted_result=interpreted_result),
+            QueryOutput(type="text", interpreted_result="interpreted_result"),
+            QueryOutput(type="table", interpreted_result="interpreted_result")
+        ]
 
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -74,14 +75,14 @@ async def llm_query_v1(
                 interpreted_result = llm.excute_generic_query(llm_message=request.messages[-1].content)
                 if interpreted_result == "Failed":
                     interpreted_result = llm.generate_general_response(llm_messages=request.messages)
-                    output = QueryOutput(error=error_code, interpreted_result=interpreted_result)
+                    output = [QueryOutput(error=error_code, interpreted_result=interpreted_result)]
                 else:
-                    output = QueryOutput(error=error_code, interpreted_result=interpreted_result)
+                    output = [QueryOutput(error=error_code, interpreted_result=interpreted_result)]
             except Exception as e:
                 error_code = e.args[0]
-                output = QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])
+                output = [QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])]
         else:
-            output = QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])
+            output = [QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])]
 
     logger.info(f"Serving miner llm query output: {output}")
 

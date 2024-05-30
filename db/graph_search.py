@@ -1,4 +1,5 @@
 from neo4j import GraphDatabase
+from loguru import logger
 
 from db.query_builder import QueryBuilder
 from protocol import QueryOutput, Query, NETWORK_BITCOIN
@@ -41,9 +42,8 @@ class BitcoinGraphSearch(BaseGraphSearch):
         self.driver.close()
 
     def execute_query(self, query: Query):
-        # build cypher query
         cypher_query = QueryBuilder.build_query(query)
-        # execute cypher query
+        logger.info(f"Executing cypher query: {cypher_query}")
         result = self.execute_cypher_query(cypher_query)
         return result
 

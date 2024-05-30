@@ -6,7 +6,10 @@ Source code produced by Blockchain Insights may not be reproduced, modified, or 
 without the express permission of Blockchain Insights.
 
 """
-
+import sys
+from loguru import logger
+logger.remove()  # Remove the default logger
+logger.add(sys.stdout, format="{time} {level} {message}", level="INFO")
 
 
 __version__ = "0.1.1"
