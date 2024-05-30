@@ -6,7 +6,7 @@ from settings import Settings, settings
 
 
 class BaseGraphSearch:
-    def execute_query(self, query: str) -> QueryOutput:
+    def execute_query(self, query: str):
         """Execute a query and return the result."""
 
     def execute_cypher_query(self, cypher_query: str):
@@ -40,7 +40,7 @@ class BitcoinGraphSearch(BaseGraphSearch):
     def close(self):
         self.driver.close()
 
-    def execute_query(self, query: Query) -> QueryOutput:
+    def execute_query(self, query: Query):
         # build cypher query
         cypher_query = QueryBuilder.build_query(query)
         # execute cypher query

@@ -13,7 +13,7 @@ class BaseLLM(ABC):
         """
     
     @abstractmethod
-    def build_query_from_messages(self, llm_messages: List[LlmMessage]) -> Query:
+    def build_query_from_messages(self, llm_messages: List[LlmMessage]):
         """
         Build query synapse from natural language query
         Used by miner

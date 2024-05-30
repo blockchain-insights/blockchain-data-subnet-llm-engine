@@ -53,9 +53,9 @@ async def llm_query_v1(
     logger.info(f"llm query received: {request.llm_type}, network: {request.network}")
 
     output = QueryOutput()
+    llm = llm_factory.create_llm(request.llm_type)
 
     try:
-        llm = llm_factory.create_llm(request.llm_type)
         query = llm.build_query_from_messages(request.messages)
         logger.info(f"extracted query: {query}")
 
