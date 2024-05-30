@@ -1,8 +1,9 @@
+import json
 import traceback
 from typing import List
-
+from pathlib import Path as FilePath
 from loguru import logger
-from fastapi import FastAPI, Request, Depends, Query, Path, Body, APIRouter
+from fastapi import FastAPI, Request, Depends, Query, Path, Body, APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 import __init__
@@ -39,6 +40,30 @@ class LLMQueryRequestV1(BaseModel):
 
 
 v1_router = APIRouter()
+
+valid_networks = ["bitcoin"]
+
+
+@v1_router.get("/networks", summary="Get supported networks", description="Get the list of supported networks", tags=["v1"])
+async def get_networks():
+    return {"networks": valid_networks}
+
+
+@v1_router.get("/schema/{network}", summary="Get schema for network", description="Get the schema for the specified network", tags=["v1"])
+async def get_schema(network: str):
+    if network not in valid_networks:
+        raise HTTPException(status_code=400, detail="Invalid network")
+
+    file_path = FilePath(f"./schemas/{network}.json")
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Schema file not found")
+
+    try:
+        with file_path.open("r") as file:
+            content = json.load(file)
+        return content
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=List[QueryOutput])
 async def llm_query_v1(
