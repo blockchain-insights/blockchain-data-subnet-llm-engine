@@ -71,7 +71,7 @@ async def get_schema(network: str):
 
 
 @v1_router.get("/discovery/{network}", summary="Get network discovery", description="Get the network discovery details", tags=["v1"])
-async def discovery(network: str):
+async def discovery_v1(network: str):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
@@ -91,10 +91,10 @@ async def discovery(network: str):
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
-@v1_router.get("/challenge/{network}/{in_total_amount}/{out_total_amount}/{tx_id_last_4_chars}",
+@v1_router.get("/challenge_utxo/{network}/{in_total_amount}/{out_total_amount}/{tx_id_last_4_chars}",
                summary="Solve challenge",
                description="Solve the challenge", tags=["v1"])
-async def challenge(network: str, in_total_amount: int, out_total_amount: int, tx_id_last_4_chars: str):
+async def challenge_utxo_v1(network: str, in_total_amount: int, out_total_amount: int, tx_id_last_4_chars: str):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
@@ -114,8 +114,21 @@ async def challenge(network: str, in_total_amount: int, out_total_amount: int, t
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
+@v1_router.get("/challenge_evm/{network}/{checksum}", summary="Solve challenge", description="Solve the challenge", tags=["v1"])
+async def challenge_utxo_v1(network: str, in_total_amount: int, out_total_amount: int, tx_id_last_4_chars: str):
+    if network not in valid_networks:
+        raise HTTPException(status_code=400, detail="Invalid network")
+    if network == protocols.blockchain.NETWORK_ETHEREUM:
+        return {
+            "network": network,
+            "output": 0,
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Invalid network")
+
+
 @v1_router.get("/benchmark/{network}/{query}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
-async def benchmark(network: str, query: str):
+async def benchmark_v1(network: str, query: str):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
