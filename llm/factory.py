@@ -1,7 +1,8 @@
+from protocols.llm_engine import LLM_TYPE_CUSTOM, LLM_TYPE_OPENAI
+
 from llm.base_llm import BaseLLM
 from llm.custom import CustomLLM
 from llm.openai import OpenAILLM
-from protocol import LLM_TYPE_CUSTOM, LLM_TYPE_OPENAI
 from settings import settings
 
 

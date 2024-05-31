@@ -1,0 +1,37 @@
+{
+  "nodes": {
+    "transaction": {
+      "properties": [
+        "is_coinbase",
+        "out_total_amount",
+        "in_total_amount",
+        "timestamp",
+        "tx_id",
+        "block_height"
+      ]
+    },
+    "address": {
+      "properties": [
+        "address"
+      ]
+    }
+  },
+  "relationships": [
+    {
+      "startNodeLabels": "Address",
+      "label": "SENT",
+      "endNodeLabels": "Transaction",
+      "properties": [
+        "value_satoshi"
+      ]
+    },
+    {
+      "startNodeLabels": "Transaction",
+      "label": "SENT",
+      "endNodeLabels": "Address",
+      "properties": [
+        "value_satoshi"
+      ]
+    }
+  ]
+}

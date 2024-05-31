@@ -3,11 +3,13 @@ import json
 from typing import Any, Dict, List, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from protocols.blockchain import NETWORK_BITCOIN
+from protocols.llm_engine import LLM_MESSAGE_TYPE_USER, LlmMessage, Query, LLM_ERROR_QUERY_BUILD_FAILED, \
+    LLM_ERROR_INTERPRETION_FAILED, LLM_ERROR_NOT_APPLICAPLE_QUESTIONS, LLM_ERROR_GENERAL_RESPONSE_FAILED
+
 from llm.base_llm import BaseLLM
 from llm.openai.memgraph_chain import MemgraphCypherQAChain
 from llm.prompts import query_schema, interpret_prompt, general_prompt
-from protocol import LlmMessage, Query, LLM_MESSAGE_TYPE_USER, NETWORK_BITCOIN, LLM_ERROR_QUERY_BUILD_FAILED, \
-    LLM_ERROR_INTERPRETION_FAILED, LLM_ERROR_NOT_APPLICAPLE_QUESTIONS, LLM_ERROR_GENERAL_RESPONSE_FAILED
 from loguru import logger
 from langchain_community.graphs import MemgraphGraph
 

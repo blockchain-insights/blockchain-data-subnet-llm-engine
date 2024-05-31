@@ -1,8 +1,9 @@
 from abc import ABC
 from typing import List, Dict, Any
 
+from protocols.llm_engine import LlmMessage, Query
+
 from llm.base_llm import BaseLLM
-from protocol import LlmMessage, Query
 from settings import Settings
 
 

@@ -1,8 +1,9 @@
 from neo4j import GraphDatabase
 from loguru import logger
+from protocols.blockchain import NETWORK_BITCOIN
+from protocols.llm_engine import Query
 
 from db.query_builder import QueryBuilder
-from protocol import QueryOutput, Query, NETWORK_BITCOIN
 from settings import Settings, settings
 
 
@@ -54,4 +55,55 @@ class BitcoinGraphSearch(BaseGraphSearch):
                 return None
             return result.data()
 
+    def get_min_max_block_height_cache(self):
+        with self.driver.session() as session:
+            result_min = session.run(
+                """
+                MATCH (n:Cache {field: 'min_block_height'})
+                RETURN n.value
+                LIMIT 1;
+                """
+            ).single()
 
+            result_max = session.run(
+                """
+                MATCH (n:Cache {field: 'max_block_height'})
+                RETURN n.value
+                LIMIT 1;
+                """
+            ).single()
+
+            min_block_height = result_min[0] if result_min else 0
+            max_block_height = result_max[0] if result_max else 0
+
+            return min_block_height, max_block_height
+
+    def solve_challenge(self, in_total_amount: int, out_total_amount: int, tx_id_last_4_chars: str) -> str:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (t:Transaction {out_total_amount: $out_total_amount})
+                WHERE t.in_total_amount = $in_total_amount AND t.tx_id ENDS WITH $tx_id_last_4_chars
+                RETURN t.tx_id
+                LIMIT 1;
+                """,
+                in_total_amount=in_total_amount,
+                out_total_amount=out_total_amount,
+                tx_id_last_4_chars=tx_id_last_4_chars
+            )
+            single_result = result.single()
+            if single_result is None or single_result[0] is None:
+                return None
+            return single_result[0]
+
+    def execute_benchmark_query(self, cypher_query: str):
+        with self.driver.session() as session:
+            result = session.run(cypher_query)
+            return result.single()
+
+
+def get_graph_search(settings, network):
+    switch = {
+        NETWORK_BITCOIN: lambda: BitcoinGraphSearch(settings),
+    }
+    return switch[network]()

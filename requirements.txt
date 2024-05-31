@@ -1,4 +1,4 @@
-fastapi~=0.111.0
+fastapi
 pydantic
 pydantic-settings
 loguru
@@ -6,3 +6,6 @@ gqlalchemy
 langchain
 langchain-openai
 langchain_community
+blockchain-data-subnet-shared-libs==0.0.3
+psycopg2-binary
+sqlalchemy

@@ -1,8 +1,8 @@
 import unittest
-import os
+
+from protocols.llm_engine import QUERY_TYPE_SEARCH, Query
 
 from db.query_builder import QueryBuilder
-from protocol import QUERY_TYPE_SEARCH, Query
 
 
 class TestGraphSearch(unittest.TestCase):

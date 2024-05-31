@@ -12,7 +12,7 @@ logger.remove()  # Remove the default logger
 logger.add(sys.stdout, format="{time} {level} {message}", level="INFO")
 
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 version_split = __version__.split(".")
 __spec_version__ = (
     (1000 * int(version_split[0]))

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     GRAPH_DB_URL: str
     GRAPH_DB_USER: str
     GRAPH_DB_PASSWORD: str
+    DB_CONNECTION_STRING: str
 
     class Config:
         env_file = ".env"  # Path to the .env file
@@ -19,10 +20,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-#print("Settings:")
-#print(settings.dict())
-#print(settings.LLM_TYPE)
-#print(settings.OPEN_AI_KEY)
-#print(settings.GRAPH_DB_URL)
-#print(settings.GRAPH_DB_USER)
-#print(settings.GRAPH_DB_PASSWORD)

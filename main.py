@@ -2,14 +2,18 @@ import json
 import traceback
 from typing import List
 from pathlib import Path as FilePath
+
+import protocols.blockchain
 from loguru import logger
 from fastapi import FastAPI, Request, Depends, Query, Path, Body, APIRouter, HTTPException
+from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES
 from pydantic import BaseModel, Field
 
 import __init__
-from db.graph_search import GraphSearchFactory
+from db.balance_search import get_balance_search
+from db.graph_search import GraphSearchFactory, get_graph_search
 from llm.factory import LLMFactory
-from protocol import QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LlmMessage, LLM_ERROR_MESSAGES
+from settings import settings
 
 app = FastAPI(
     title="Blockchain Insights LLM ENGINE",
@@ -40,13 +44,13 @@ class LLMQueryRequestV1(BaseModel):
 
 
 v1_router = APIRouter()
-
-valid_networks = ["bitcoin"]
+valid_networks = [protocols.blockchain.NETWORK_BITCOIN]
 
 
 @v1_router.get("/networks", summary="Get supported networks", description="Get the list of supported networks", tags=["v1"])
 async def get_networks():
     return {"networks": valid_networks}
+
 
 
 @v1_router.get("/schema/{network}", summary="Get schema for network", description="Get the schema for the specified network", tags=["v1"])
@@ -64,6 +68,67 @@ async def get_schema(network: str):
         return content
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@v1_router.get("/discovery/{network}", summary="Get network discovery", description="Get the network discovery details", tags=["v1"])
+async def discovery(network: str):
+    if network not in valid_networks:
+        raise HTTPException(status_code=400, detail="Invalid network")
+    if network == protocols.blockchain.NETWORK_BITCOIN:
+        graph_search = get_graph_search(settings, network)
+        balance_search = get_balance_search(settings, network)
+        funds_flow_model_start_block, funds_flow_model_last_block = graph_search.get_min_max_block_height_cache()
+        balance_model_last_block = balance_search.get_latest_block_number()
+
+        return {
+            "network": network,
+            "funds_flow_model_start_block": funds_flow_model_start_block,
+            "funds_flow_model_ast_block": funds_flow_model_last_block,
+            "balance_model_last_block": balance_model_last_block
+        }
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid network")
+
+
+@v1_router.get("/challenge/{network}/{in_total_amount}/{out_total_amount}/{tx_id_last_4_chars}",
+               summary="Solve challenge",
+               description="Solve the challenge", tags=["v1"])
+async def challenge(network: str, in_total_amount: int, out_total_amount: int, tx_id_last_4_chars: str):
+    if network not in valid_networks:
+        raise HTTPException(status_code=400, detail="Invalid network")
+    if network == protocols.blockchain.NETWORK_BITCOIN:
+        graph_search = get_graph_search(settings, network)
+        output = graph_search.solve_challenge(
+            in_total_amount=in_total_amount,
+            out_total_amount=out_total_amount,
+            tx_id_last_4_chars=tx_id_last_4_chars
+        )
+
+        return {
+            "network": network,
+            "output": output,
+        }
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid network")
+
+
+@v1_router.get("/benchmark/{network}/{query}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
+async def benchmark(network: str, query: str):
+    if network not in valid_networks:
+        raise HTTPException(status_code=400, detail="Invalid network")
+    if network == protocols.blockchain.NETWORK_BITCOIN:
+        graph_search = get_graph_search(settings, network)
+        output = graph_search.execute_benchmark_query(query)
+
+        return {
+            "network": network,
+            "output": output,
+        }
+
+    else:
+        raise HTTPException(status_code=400, detail="Invalid network")
 
 @v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=List[QueryOutput])
 async def llm_query_v1(

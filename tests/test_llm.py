@@ -1,9 +1,9 @@
 import unittest
-import os
+
+from protocols.llm_engine import LlmMessage, LLM_MESSAGE_TYPE_USER, LLM_ERROR_TYPE_NOT_SUPPORTED
 
 from db.graph_search import BitcoinGraphSearch
 from llm.openai import OpenAILLM
-from protocol import LLM_MESSAGE_TYPE_USER, LlmMessage, LLM_ERROR_TYPE_NOT_SUPPORTED
 from settings import settings
 
 
