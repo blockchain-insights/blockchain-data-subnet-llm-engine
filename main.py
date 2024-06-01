@@ -22,6 +22,8 @@ app = FastAPI(
     version=__init__.__version__,)
 
 
+benchmark_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX', 'CREATE CONSTRAINT', 'DROP CONSTRAINT']
+
 def get_llm_factory() -> LLMFactory:
     return LLMFactory()
 
@@ -139,6 +141,16 @@ async def challenge_v1(network: str,
 
 @v1_router.get("/benchmark/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
 async def benchmark_v1(network: str, query: str = Query(..., description="Query to benchmark")):
+    def is_query_only(query_restricted_keywords, cypher_query):
+        normalized_query = cypher_query.upper()
+        for keyword in query_restricted_keywords:
+            if keyword in normalized_query:
+                return False
+        return True
+
+    if is_query_only(benchmark_restricted_keywords, query):
+        raise HTTPException(status_code=400, detail="Invalid query, restricted keywords found in query")
+
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
