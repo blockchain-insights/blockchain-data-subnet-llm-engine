@@ -35,22 +35,20 @@ def get_graph_search_factory() -> GraphSearchFactory:
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     try:
-        response = await asyncio.wait_for(call_next(request), timeout=30)
+        response = await asyncio.wait_for(call_next(request), timeout=3*60)
         return response
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Request timeout")
+        raise HTTPException(status_code=504, detail=f"Request timeout: {request.method} {request.url}")
 
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    logger.info(f"New request: {request.method} {request.url}")
-
     start_time = time.time()
     response = await call_next(request)
     end_time = time.time()
 
     duration = end_time - start_time
-    logger.info(f"Request completed: {response.status_code} in {duration:.4f} seconds")
+    logger.info(f"Request completed: {request.method} {request.url} in {duration:.4f} seconds")
 
     return response
 
