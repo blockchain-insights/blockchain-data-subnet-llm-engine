@@ -90,7 +90,7 @@ async def discovery_v1(network: str):
         balance_search = get_balance_search(settings, network)
         funds_flow_model_start_block, funds_flow_model_last_block = graph_search.get_min_max_block_height_cache()
         balance_model_last_block = balance_search.get_latest_block_number()
-
+        graph_search.close()
         return {
             "network": network,
             "funds_flow_model_start_block": funds_flow_model_start_block,
@@ -123,6 +123,7 @@ async def challenge_v1(network: str,
             out_total_amount=out_total_amount,
             tx_id_last_4_chars=tx_id_last_4_chars
         )
+        graph_search.close()
         return {
             "network": network,
             "output": output,
@@ -148,7 +149,7 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
                 return False
         return True
 
-    if is_query_only(benchmark_restricted_keywords, query):
+    if not is_query_only(benchmark_restricted_keywords, query):
         raise HTTPException(status_code=400, detail="Invalid query, restricted keywords found in query")
 
     if network not in valid_networks:
@@ -156,7 +157,7 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
     if network == protocols.blockchain.NETWORK_BITCOIN:
         graph_search = get_graph_search(settings, network)
         output = graph_search.execute_benchmark_query(query)
-
+        graph_search.close()
         return {
             "network": network,
             "output": output[0],
@@ -184,7 +185,7 @@ async def llm_query_v1(
         graph_search = graph_search_factory.create_graph_search(request.network)
         result = graph_search.execute_query(query=query)
         interpreted_result = llm.interpret_result(llm_messages=request.messages, result=result)
-
+        graph_search.close()
         output = [
             QueryOutput(type="graph", result=result, interpreted_result=interpreted_result),
             QueryOutput(type="text", interpreted_result="interpreted_result"),
