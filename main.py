@@ -180,16 +180,25 @@ async def llm_query_v1(
     logger.info(f"llm query received: {request.llm_type}, network: {request.network}")
 
     output = None
+    start_time = time.time()
 
     llm = llm_factory.create_llm(request.llm_type)
 
     try:
+        query_start_time = time.time()
         query = llm.build_query_from_messages(request.messages)
-        logger.info(f"extracted query: {query}")
+        logger.info(f"extracted query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
         graph_search = graph_search_factory.create_graph_search(request.network)
+
+        execute_query_start_time = time.time()
         result = graph_search.execute_query(query=query)
+        logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
+
+        interpret_result_start_time = time.time()
         interpreted_result = llm.interpret_result(llm_messages=request.messages, result=result)
+        logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
+
         graph_search.close()
         output = [
             QueryOutput(type="graph", result=result, interpreted_result=interpreted_result),
@@ -215,7 +224,7 @@ async def llm_query_v1(
         else:
             output = [QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])]
 
-    logger.info(f"Serving miner llm query output: {output}")
+    logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
     return output
 
