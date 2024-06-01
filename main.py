@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import traceback
 from typing import List
 from pathlib import Path as FilePath
@@ -43,8 +44,14 @@ async def add_process_time_header(request: Request, call_next):
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     logger.info(f"New request: {request.method} {request.url}")
+
+    start_time = time.time()
     response = await call_next(request)
-    logger.info(f"Request completed: {response.status_code}")
+    end_time = time.time()
+
+    duration = end_time - start_time
+    logger.info(f"Request completed: {response.status_code} in {duration:.4f} seconds")
+
     return response
 
 

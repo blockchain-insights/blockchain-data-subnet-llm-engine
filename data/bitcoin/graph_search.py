@@ -37,6 +37,10 @@ class BitcoinGraphSearch(BaseGraphSearch):
         self.driver = GraphDatabase.driver(
             settings.GRAPH_DB_URL,
             auth=(settings.GRAPH_DB_USER, settings.GRAPH_DB_PASSWORD),
+            connection_timeout=60,
+            max_connection_lifetime=60,
+            max_connection_pool_size=128,
+            encrypted=False,
         )
 
     def close(self):
