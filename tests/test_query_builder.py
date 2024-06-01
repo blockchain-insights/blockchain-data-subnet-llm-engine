@@ -2,7 +2,7 @@ import unittest
 
 from protocols.llm_engine import QUERY_TYPE_SEARCH, Query
 
-from db.query_builder import QueryBuilder
+from data.bitcoin.query_builder import QueryBuilder
 
 
 class TestGraphSearch(unittest.TestCase):

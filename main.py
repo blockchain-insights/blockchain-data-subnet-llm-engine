@@ -6,13 +6,13 @@ from pathlib import Path as FilePath
 
 import protocols.blockchain
 from loguru import logger
-from fastapi import FastAPI, Request, Depends, Query, Path, Body, APIRouter, HTTPException
+from fastapi import FastAPI, Request, Depends, Query, Body, APIRouter, HTTPException
 from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES
 from pydantic import BaseModel, Field
 
 import __init__
-from db.balance_search import get_balance_search
-from db.graph_search import GraphSearchFactory, get_graph_search
+from data.bitcoin.balance_search import get_balance_search
+from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
 from llm.factory import LLMFactory
 from settings import settings
 

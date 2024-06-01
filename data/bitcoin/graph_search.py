@@ -3,7 +3,7 @@ from loguru import logger
 from protocols.blockchain import NETWORK_BITCOIN
 from protocols.llm_engine import Query
 
-from db.query_builder import QueryBuilder
+from data.bitcoin.query_builder import QueryBuilder
 from settings import Settings, settings
 
 

@@ -237,7 +237,7 @@ class MemgraphCypherQAChain(GraphCypherQAChain):
         inputs: Dict[str, Any],
         run_manager: Optional[CallbackManagerForChainRun] = None,
     ) -> Dict[str, Any]:
-        """Generate Cypher statement, use it to look up in db and answer question."""
+        """Generate Cypher statement, use it to look up in data and answer question."""
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         callbacks = _run_manager.get_child()
         question = inputs[self.input_key]
@@ -262,7 +262,7 @@ class MemgraphCypherQAChain(GraphCypherQAChain):
 
         intermediate_steps.append({"query": generated_cypher})
 
-        # Check if query is modifying the db
+        # Check if query is modifying the data
         if 'SET' in generated_cypher or 'DELETE' in generated_cypher or 'CREATE' in generated_cypher:
             return {self.output_key: 'You are trying to change the database and it is forbidden'}
         
