@@ -1,3 +1,4 @@
+import asyncio
 import json
 import traceback
 from typing import List
@@ -28,6 +29,14 @@ def get_llm_factory() -> LLMFactory:
 def get_graph_search_factory() -> GraphSearchFactory:
     return GraphSearchFactory()
 
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    try:
+        response = await asyncio.wait_for(call_next(request), timeout=30)
+        return response
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Request timeout")
+
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -44,7 +53,7 @@ class LLMQueryRequestV1(BaseModel):
 
 
 v1_router = APIRouter()
-valid_networks = [protocols.blockchain.NETWORK_BITCOIN]
+valid_networks = [protocols.blockchain.NETWORK_BITCOIN, protocols.blockchain.NETWORK_ETHEREUM]
 
 
 @v1_router.get("/networks", summary="Get supported networks", description="Get the list of supported networks", tags=["v1"])
@@ -91,34 +100,35 @@ async def discovery_v1(network: str):
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
-@v1_router.get("/challenge_utxo/{network}/{in_total_amount}/{out_total_amount}/{tx_id_last_4_chars}",
+@v1_router.get("/challenge/{network}",
                summary="Solve challenge",
                description="Solve the challenge", tags=["v1"])
-async def challenge_utxo_v1(network: str, in_total_amount: int, out_total_amount: int, tx_id_last_4_chars: str):
+async def challenge_v1(network: str,
+                            in_total_amount: int = Query(None, description="Input total amount"),
+                            out_total_amount: int = Query(None, description="Output total amount"),
+                            tx_id_last_4_chars: str = Query(None, description="Transaction ID last 4 characters"),
+                            checksum: str = Query(None, description="Checksum query parameter")):
+
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
+
     if network == protocols.blockchain.NETWORK_BITCOIN:
+        if in_total_amount is None or out_total_amount is None or tx_id_last_4_chars is None:
+            raise HTTPException(status_code=400, detail="Missing required query parameters for Bitcoin network, required: in_total_amount, out_total_amount, tx_id_last_4_chars")
         graph_search = get_graph_search(settings, network)
         output = graph_search.solve_challenge(
             in_total_amount=in_total_amount,
             out_total_amount=out_total_amount,
             tx_id_last_4_chars=tx_id_last_4_chars
         )
-
         return {
             "network": network,
             "output": output,
         }
-
-    else:
-        raise HTTPException(status_code=400, detail="Invalid network")
-
-
-@v1_router.get("/challenge_evm/{network}/{checksum}", summary="Solve challenge", description="Solve the challenge", tags=["v1"])
-async def challenge_utxo_v1(network: str, in_total_amount: int, out_total_amount: int, tx_id_last_4_chars: str):
-    if network not in valid_networks:
-        raise HTTPException(status_code=400, detail="Invalid network")
-    if network == protocols.blockchain.NETWORK_ETHEREUM:
+    elif network == protocols.blockchain.NETWORK_ETHEREUM:
+        if checksum is None:
+            raise HTTPException(status_code=400,
+                                detail="Missing required query parameters for EVM network, required: checksum")
         return {
             "network": network,
             "output": 0,
@@ -127,8 +137,8 @@ async def challenge_utxo_v1(network: str, in_total_amount: int, out_total_amount
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
-@v1_router.get("/benchmark/{network}/{query}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
-async def benchmark_v1(network: str, query: str):
+@v1_router.get("/benchmark/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
+async def benchmark_v1(network: str, query: str = Query(..., description="Query to benchmark")):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
@@ -137,7 +147,7 @@ async def benchmark_v1(network: str, query: str):
 
         return {
             "network": network,
-            "output": output,
+            "output": output[0],
         }
 
     else:
