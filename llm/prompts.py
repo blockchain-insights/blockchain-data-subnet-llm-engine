@@ -52,6 +52,7 @@ The "where" conditional object for the target "Address" looks like this;
 Then, you need to determine "limit", which refers to how many results the user wants to get. If the user doesn't specify it, set it null.
 You need to remove all the keys with value None in the generated JSON.
 Only contain JSON in the response. Don't include any prefix or postfix.
+Don't format response as JSON.
 """
 
 interpret_prompt = """
