@@ -34,6 +34,7 @@ class GraphSearchFactory:
 
 class BitcoinGraphSearch(BaseGraphSearch):
     def __init__(self, settings: Settings):
+        logger.info(f'Here is loaded configs {settings.GRAPH_DB_URL}')
         self.driver = GraphDatabase.driver(
             settings.GRAPH_DB_URL,
             auth=(settings.GRAPH_DB_USER, settings.GRAPH_DB_PASSWORD),
