@@ -19,7 +19,7 @@ from settings import Settings
 class OpenAILLM(BaseLLM):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.chat = ChatOpenAI(api_key=settings.OPEN_AI_KEY, model="gpt-4", temperature=0)
+        self.chat_gpt4o = ChatOpenAI(api_key=settings.OPEN_AI_KEY, model="gpt-4o", temperature=0)
 
     def build_query_from_messages(self, llm_messages: List[LlmMessage]) -> Query:
         messages = [
@@ -33,7 +33,8 @@ class OpenAILLM(BaseLLM):
             else:
                 messages.append(AIMessage(content=llm_message.content))
         try:
-            ai_message = self.chat.invoke(messages)
+            ai_message = self.chat_gpt4o.invoke(messages)
+            logger.info(f'ai_message using GPT-4  : {ai_message}')
             query = json.loads(ai_message.content)
             return Query(
                 network=NETWORK_BITCOIN,
@@ -60,7 +61,8 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
 
         try:
-            ai_message = self.chat.invoke(messages)
+            ai_message= self.chat_gpt4o.invoke(messages)
+            logger.info(f'ai_message using GPT-4  : {ai_message}')
             return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery interpret result error: {e}")
@@ -79,7 +81,8 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
 
         try:
-            ai_message = self.chat.invoke(messages)
+            ai_message = self.chat_gpt4o.invoke(messages)
+            logger.info(f'ai_message using GPT-4  : {ai_message}')
             if ai_message == "not applicable questions":
                 raise Exception(LLM_ERROR_NOT_APPLICAPLE_QUESTIONS)
             else:
@@ -98,7 +101,7 @@ class OpenAILLM(BaseLLM):
 
         # Note: Creating the GraphCypherQAChain
         chain = MemgraphCypherQAChain.from_llm(ChatOpenAI(temperature=0.7), graph=graph, return_intermediate_steps=True,
-                                               verbose=True, model_name='gpt-4')
+                                               verbose=True, model_name='gpt-4o')
         # Note: Querying
         try:
             response = chain.run(llm_message)
