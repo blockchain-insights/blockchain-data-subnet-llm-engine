@@ -228,4 +228,91 @@ async def llm_query_v1(
 
     return output
 
+
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import Column, Integer, BigInteger, String, TIMESTAMP, create_engine, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain.llms import OpenAI
+import os
+
+app = FastAPI()
+
+# Define SQLAlchemy model
+Base = declarative_base()
+
+
+class BalanceChange(Base):
+    __tablename__ = 'balance_changes'
+    address = Column(String, primary_key=True)
+    block = Column(Integer, primary_key=True)
+    d_balance = Column(BigInteger)
+    block_timestamp = Column(TIMESTAMP)
+
+
+# Database connection setup
+DATABASE_URL = os.getenv('DB_CONNECTION_STRING_MINER', "postgresql://postgres:changeit456$@localhost:5432/miner")
+ENGINE = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=ENGINE)
+
+Base.metadata.create_all(bind=ENGINE)
+
+# LangChain setup
+llm = OpenAI(api_key=os.getenv('OPENAI_AI_KEY', 'sk-proj-cbnuinw4gHUgaK2BJdWsT3BlbkFJBMFkJZs0uYF5dtwrCtm2'))
+
+# Create a prompt template
+prompt_template = PromptTemplate(
+    input_variables=["question"],
+    template="""
+    You are an assistant to help me query balance changes.
+    I will ask you questions, and you will generate SQL queries to fetch the data.
+
+    The database table is called `balance_changes` and has the following columns:
+    - address (string)
+    - block (integer)
+    - d_balance (big integer)
+    - block_timestamp (timestamp)
+
+    For example:
+    "Return the address with the highest amount of BTC in December 2009."
+
+    My question: {question}
+    SQL query:
+    """
+)
+
+# Create an LLMChain with the prompt template and LLM
+llm_chain = LLMChain(prompt=prompt_template, llm=llm)
+
+
+# FastAPI request model
+class QueryRequest(BaseModel):
+    prompt: str
+
+
+# Endpoint to handle queries
+@app.post("/query")
+async def query(request: QueryRequest):
+    try:
+        # Translate the natural language prompt into an SQL query
+        sql_query = llm_chain.run(question=request.prompt).strip()
+
+        # Execute the SQL query
+        with SessionLocal() as session:
+            result = session.execute(text(sql_query))
+            columns = result.keys()
+            rows = result.fetchall()
+
+        # Convert the result to a list of dictionaries
+        results = [dict(zip(columns, row)) for row in rows]
+
+        # Return the results
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.include_router(v1_router, prefix="/v1")
