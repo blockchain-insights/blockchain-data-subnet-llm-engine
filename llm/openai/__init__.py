@@ -48,6 +48,52 @@ class OpenAILLM(BaseLLM):
             logger.error(f"LlmQuery build error: {e}")
             raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
 
+    def build_query_from_messages_balance_tracker(self, llm_messages: List[LlmMessage]) -> Query:
+        balance_tracker_query_schema = """
+    You are an assistant to help me query balance changes.
+    I will ask you questions, and you will generate SQL queries to fetch the data.
+
+    The database table is called `balance_changes` and has the following columns:
+    - address (string)
+    - block (integer)
+    - d_balance (big integer)
+    - block_timestamp (timestamp)
+
+    For example:
+    "Return the address with the highest amount of BTC in December 2009."
+
+    My question: {question}
+    SQL query:
+    """
+        messages = [
+            SystemMessage(
+                content=balance_tracker_query_schema
+            ),
+        ]
+        for llm_message in llm_messages:
+            if llm_message.type == LLM_MESSAGE_TYPE_USER:
+                messages.append(HumanMessage(content=llm_message.content))
+            else:
+                messages.append(AIMessage(content=llm_message.content))
+        try:
+            ai_message = self.chat_gpt4o.invoke(messages)
+            logger.info(f'ai_message using GPT-4  : {ai_message}')
+
+            # Log the entire response content
+            logger.debug(f"AI message content: {ai_message.content}")
+
+            # Check if the content is wrapped in triple backticks and contains SQL code
+            if ai_message.content.startswith("```") and ai_message.content.endswith("```"):
+                # Extract the SQL code from the response
+                query = ai_message.content.strip("```sql\n").strip("```")
+                return query
+            else:
+                logger.error("Received invalid format from AI response")
+                raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
+        except Exception as e:
+            logger.error(f"LlmQuery build error: {e}")
+            raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
+
     def interpret_result(self, llm_messages: str, result: list) -> str:
         messages = [
             SystemMessage(
@@ -68,6 +114,32 @@ class OpenAILLM(BaseLLM):
             logger.error(f"LlmQuery interpret result error: {e}")
             raise Exception(LLM_ERROR_INTERPRETION_FAILED)
 
+    def interpret_result_balance_tracker(self, llm_messages: List[LlmMessage], result: list) -> str:
+        balance_tracker_interpret_prompt = """
+        You are an assistant to interpret the results of a balance tracker query.
+        Here is the result set:
+        {result}
+
+        Please summarize the balance changes in a user-friendly way.
+        """
+        messages = [
+            SystemMessage(
+                content=balance_tracker_interpret_prompt.format(result=result)
+            ),
+        ]
+        for llm_message in llm_messages:
+            if llm_message.type == LLM_MESSAGE_TYPE_USER:
+                messages.append(HumanMessage(content=llm_message.content))
+            else:
+                messages.append(AIMessage(content=llm_message.content))
+
+        try:
+            ai_message = self.chat_gpt4o.invoke(messages)
+            logger.info(f'ai_message using GPT-4  : {ai_message}')
+            return ai_message.content
+        except Exception as e:
+            logger.error(f"LlmQuery interpret result error: {e}")
+            raise Exception(LLM_ERROR_INTERPRETION_FAILED)
     def generate_general_response(self, llm_messages: List[LlmMessage]) -> str:
         messages = [
             SystemMessage(
