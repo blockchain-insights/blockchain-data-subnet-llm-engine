@@ -17,6 +17,12 @@ from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
 from llm.factory import LLMFactory
 from settings import settings
 
+from sqlalchemy import Column, Integer, BigInteger, String, TIMESTAMP, create_engine, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+import os
+
 app = FastAPI(
     title="Blockchain Insights LLM ENGINE",
     description="API designed to execute user prompts related to blockchain queries using LLM agents. It integrates with different LLMs and graph search functionalities to process and interpret blockchain data.",
@@ -230,89 +236,77 @@ async def llm_query_v1(
 
 
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from sqlalchemy import Column, Integer, BigInteger, String, TIMESTAMP, create_engine, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-from langchain.llms import OpenAI
-import os
-
-app = FastAPI()
-
-# Define SQLAlchemy model
-Base = declarative_base()
-
-
-class BalanceChange(Base):
-    __tablename__ = 'balance_changes'
-    address = Column(String, primary_key=True)
-    block = Column(Integer, primary_key=True)
-    d_balance = Column(BigInteger)
-    block_timestamp = Column(TIMESTAMP)
-
-
 # Database connection setup
 DATABASE_URL = os.getenv('DB_CONNECTION_STRING_MINER', "postgresql://postgres:changeit456$@localhost:5432/miner")
 ENGINE = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=ENGINE)
 
+Base = declarative_base()
+
 Base.metadata.create_all(bind=ENGINE)
 
-# LangChain setup
-llm = OpenAI(api_key=os.getenv('OPENAI_AI_KEY', 'sk-proj-cbnuinw4gHUgaK2BJdWsT3BlbkFJBMFkJZs0uYF5dtwrCtm2'))
+@v1_router.post("/process_prompt_balance_tracking", summary="Executes user prompt for balance tracking", description="Execute user prompt for balance tracking and return the result", tags=["v1"], response_model=List[QueryOutput])
+async def llm_query_v2(
+        request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "Return me address who had highest amount of BTC in 2009-01"}]}),
+        llm_factory: LLMFactory = Depends(get_llm_factory),
+        graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
 
-# Create a prompt template
-prompt_template = PromptTemplate(
-    input_variables=["question"],
-    template="""
-    You are an assistant to help me query balance changes.
-    I will ask you questions, and you will generate SQL queries to fetch the data.
+    logger.info(f"llm query received: {request.llm_type}, network: {request.network}")
 
-    The database table is called `balance_changes` and has the following columns:
-    - address (string)
-    - block (integer)
-    - d_balance (big integer)
-    - block_timestamp (timestamp)
+    output = None
+    start_time = time.time()
 
-    For example:
-    "Return the address with the highest amount of BTC in December 2009."
+    llm = llm_factory.create_llm(request.llm_type)
 
-    My question: {question}
-    SQL query:
-    """
-)
-
-# Create an LLMChain with the prompt template and LLM
-llm_chain = LLMChain(prompt=prompt_template, llm=llm)
-
-
-# FastAPI request model
-class QueryRequest(BaseModel):
-    prompt: str
-
-
-# Endpoint to handle queries
-@app.post("/query")
-async def query(request: QueryRequest):
     try:
-        # Translate the natural language prompt into an SQL query
-        sql_query = llm_chain.run(question=request.prompt).strip()
+        query_start_time = time.time()
+        query = llm.build_query_from_messages_balance_tracker(request.messages)
+        logger.info(f"extracted query: {query} (Time taken: {time.time() - query_start_time} seconds)")
+
+        execute_query_start_time = time.time()
 
         # Execute the SQL query
         with SessionLocal() as session:
-            result = session.execute(text(sql_query))
+            result = session.execute(text(query))
             columns = result.keys()
             rows = result.fetchall()
 
         # Convert the result to a list of dictionaries
-        results = [dict(zip(columns, row)) for row in rows]
+        result= [dict(zip(columns, row)) for row in rows]
 
-        # Return the results
-        return {"results": results}
+        logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
+
+        interpret_result_start_time = time.time()
+        interpreted_result = llm.interpret_result_balance_tracker(llm_messages=request.messages, result=result)
+        logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
+
+        output = [
+            QueryOutput(type="graph", result=result, interpreted_result=interpreted_result),
+            QueryOutput(type="text", interpreted_result="interpreted_result"),
+            QueryOutput(type="table", interpreted_result="interpreted_result")
+        ]
+
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(traceback.format_exc())
+        error_code = e.args[0]
+        if error_code == LLM_ERROR_TYPE_NOT_SUPPORTED:
+            # handle unsupported query templates
+            try:
+                interpreted_result = llm.excute_generic_query(llm_message=request.messages[-1].content)
+                if interpreted_result == "Failed":
+                    interpreted_result = llm.generate_general_response(llm_messages=request.messages)
+                    output = [QueryOutput(error=error_code, interpreted_result=interpreted_result)]
+                else:
+                    output = [QueryOutput(error=error_code, interpreted_result=interpreted_result)]
+            except Exception as e:
+                error_code = e.args[0]
+                output = [QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])]
+        else:
+            output = [QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])]
+
+    logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
+
+    return output
+
 
 app.include_router(v1_router, prefix="/v1")
