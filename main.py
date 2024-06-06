@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 import __init__
 from data.bitcoin.balance_search import get_balance_search
+from data.bitcoin.graph_result_transformer import transform_result
 from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
 from llm.factory import LLMFactory
 from settings import settings
@@ -195,13 +196,15 @@ async def llm_query_v1(
         result = graph_search.execute_query(query=query)
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
 
+        graph_search.close()
+        graph_transformed_result = transform_result(result)
+
         interpret_result_start_time = time.time()
-        interpreted_result = llm.interpret_result(llm_messages=request.messages, result=result)
+        interpreted_result = llm.interpret_result(llm_messages=request.messages, result=graph_transformed_result)
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
-        graph_search.close()
         output = [
-            QueryOutput(type="graph", result=result, interpreted_result=interpreted_result),
+            QueryOutput(type="graph", result=graph_transformed_result, interpreted_result=interpreted_result),
             QueryOutput(type="text", interpreted_result="interpreted_result"),
             QueryOutput(type="table", interpreted_result="interpreted_result")
         ]
