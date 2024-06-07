@@ -18,6 +18,8 @@ from data.bitcoin.query_builder import QueryBuilder
 from llm.factory import LLMFactory
 from settings import settings
 
+from typing import Dict, Union
+
 app = FastAPI(
     title="Blockchain Insights LLM ENGINE",
     description="API designed to execute user prompts related to blockchain queries using LLM agents. It integrates with different LLMs and graph search functionalities to process and interpret blockchain data.",
@@ -172,15 +174,7 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
     else:
         raise HTTPException(status_code=400, detail="Invalid network")
 
-@v1_router.post("/run_cypher_query", tags=["v1"])
-async def run_cypher_query(request: dict,
-        graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
-    query = request['query']
-    graph_search = graph_search_factory.create_graph_search(request["network"])
-    result = graph_search.execute_query(query)
-    return result
-
-@v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=List[QueryOutput])
+@v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=Union[List[QueryOutput], Dict])
 async def llm_query_v1(
         request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "Return 15 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
@@ -197,15 +191,14 @@ async def llm_query_v1(
         query_start_time = time.time()
         graph_search = graph_search_factory.create_graph_search(request.network)
 
-        origin_query = llm.build_query_from_messages(request.messages)
-        origin_cypher_query = QueryBuilder.build_query(origin_query)
-        logger.info(f"origin cypher query: {origin_cypher_query} (Time taken: {time.time() - query_start_time} seconds)")
-
         query_start_time = time.time()
     
         query = llm.build_cypher_query_from_messages(request.messages).strip('`')
         logger.info(f"generated cypher query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
+        if(query == 'error'):
+            logger.error("Modification is not allowed")
+            return {'error' : 'Modification is not allowed'}
         execute_query_start_time = time.time()
         result = graph_search.execute_query(query)
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")

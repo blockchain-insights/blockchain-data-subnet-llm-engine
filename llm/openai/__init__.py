@@ -34,7 +34,6 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
         try:
             ai_message = self.chat_gpt4o.invoke(messages)
-            #logger.info(f'ai_message using GPT-4  : {ai_message}')
             query = json.loads(ai_message.content)
             return Query(
                 network=NETWORK_BITCOIN,
@@ -61,8 +60,6 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
         try:
             ai_message = self.chat_gpt4o.invoke(messages)
-            #logger.info(f'ai_message using GPT-4  : {ai_message}')
-            #query = json.loads(ai_message.content)
             return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery build error: {e}")
