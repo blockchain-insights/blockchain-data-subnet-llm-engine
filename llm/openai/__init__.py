@@ -74,6 +74,8 @@ class OpenAILLM(BaseLLM):
             - `blocks` is related to `balance_changes` via the `block_height` (in `blocks`) and `block` (in `balance_changes`) fields.
 
             You should be able to handle queries that span across these three tables. For questions on mined blocks and their timestamps, use the `blocks` table.
+            
+            Note: Always ensure that the generated SQL queries are safe and do not contain any harmful or destructive commands such as DROP, DELETE, TRUNCATE, etc.
 
             For example:
             "Return the address with the highest amount of BTC in December 2009."
