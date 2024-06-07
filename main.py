@@ -12,11 +12,18 @@ from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUP
 from pydantic import BaseModel, Field
 
 import __init__
-from data.bitcoin.balance_search import get_balance_search
+from data.bitcoin.balance_search import BalanceSearchFactory
+from data.bitcoin.graph_result_transformer import transform_result
 from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
 from data.bitcoin.query_builder import QueryBuilder
 from llm.factory import LLMFactory
 from settings import settings
+
+from sqlalchemy import Column, Integer, BigInteger, String, TIMESTAMP, create_engine, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+import os
 
 from typing import Dict, Union
 
@@ -28,12 +35,18 @@ app = FastAPI(
 
 benchmark_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX', 'CREATE CONSTRAINT', 'DROP CONSTRAINT']
 
+
 def get_llm_factory() -> LLMFactory:
     return LLMFactory()
 
 
 def get_graph_search_factory() -> GraphSearchFactory:
     return GraphSearchFactory()
+
+
+def get_balance_search_factory() -> BalanceSearchFactory:
+    return BalanceSearchFactory()
+
 
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
@@ -71,7 +84,6 @@ async def get_networks():
     return {"networks": valid_networks}
 
 
-
 @v1_router.get("/schema/{network}", summary="Get schema for network", description="Get the schema for the specified network", tags=["v1"])
 async def get_schema(network: str):
     if network not in valid_networks:
@@ -90,12 +102,14 @@ async def get_schema(network: str):
 
 
 @v1_router.get("/discovery/{network}", summary="Get network discovery", description="Get the network discovery details", tags=["v1"])
-async def discovery_v1(network: str):
+async def discovery_v1(network: str,
+                       balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
         graph_search = get_graph_search(settings, network)
-        balance_search = get_balance_search(settings, network)
+
+        balance_search = balance_search_factory.create_balance_search(network)
         funds_flow_model_start_block, funds_flow_model_last_block = graph_search.get_min_max_block_height_cache()
         balance_model_last_block = balance_search.get_latest_block_number()
         graph_search.close()
@@ -203,13 +217,15 @@ async def llm_query_v1(
         result = graph_search.execute_query(query)
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
 
+        graph_search.close()
+        graph_transformed_result = transform_result(result)
+
         interpret_result_start_time = time.time()
-        interpreted_result = llm.interpret_result(llm_messages=request.messages, result=result)
+        interpreted_result = llm.interpret_result(llm_messages=request.messages, result=graph_transformed_result)
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
-        graph_search.close()
         output = [
-            QueryOutput(type="graph", result=result, interpreted_result=interpreted_result),
+            QueryOutput(type="graph", result=graph_transformed_result, interpreted_result=interpreted_result),
             QueryOutput(type="text", interpreted_result="interpreted_result"),
             QueryOutput(type="table", interpreted_result="interpreted_result")
         ]
@@ -235,5 +251,61 @@ async def llm_query_v1(
     logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
     return output
+
+
+@v1_router.post("/process_prompt_balance_tracking", summary="Executes user prompt for balance tracking", description="Execute user prompt for balance tracking and return the result", tags=["v1"], response_model=List[QueryOutput])
+async def llm_query_balance_v1(
+        request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "Return me address who had highest amount of BTC in 2009-01"}]}),
+        llm_factory: LLMFactory = Depends(get_llm_factory),
+        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
+
+    logger.info(f"llm query received: {request.llm_type}, network: {request.network}")
+
+    output = None
+    start_time = time.time()
+
+    llm = llm_factory.create_llm(request.llm_type)
+
+    try:
+        query_start_time = time.time()
+        query = llm.build_query_from_messages_balance_tracker(request.messages)
+        logger.info(f"extracted query: {query} (Time taken: {time.time() - query_start_time} seconds)")
+
+        execute_query_start_time = time.time()
+        result = balance_search_factory.create_balance_search(request.network).execute_query(query)
+        logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
+
+        interpret_result_start_time = time.time()
+        interpreted_result = llm.interpret_result_balance_tracker(llm_messages=request.messages, result=result)
+        logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
+
+        output = [
+            QueryOutput(type="graph", interpreted_result="interpreted_result"),
+            QueryOutput(type="text", interpreted_result="interpreted_result"),
+            QueryOutput(type="table", result=result, interpreted_result=interpreted_result),
+        ]
+
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        error_code = e.args[0]
+        if error_code == LLM_ERROR_TYPE_NOT_SUPPORTED:
+            # handle unsupported query templates
+            try:
+                interpreted_result = llm.excute_generic_query(llm_message=request.messages[-1].content)
+                if interpreted_result == "Failed":
+                    interpreted_result = llm.generate_general_response(llm_messages=request.messages)
+                    output = [QueryOutput(error=error_code, interpreted_result=interpreted_result)]
+                else:
+                    output = [QueryOutput(error=error_code, interpreted_result=interpreted_result)]
+            except Exception as e:
+                error_code = e.args[0]
+                output = [QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])]
+        else:
+            output = [QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES[error_code])]
+
+    logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
+
+    return output
+
 
 app.include_router(v1_router, prefix="/v1")
