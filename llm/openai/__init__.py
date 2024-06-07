@@ -9,7 +9,7 @@ from protocols.llm_engine import LLM_MESSAGE_TYPE_USER, LlmMessage, Query, LLM_E
 
 from llm.base_llm import BaseLLM
 from llm.openai.memgraph_chain import MemgraphCypherQAChain
-from llm.prompts import query_schema, interpret_prompt, general_prompt
+from llm.prompts import query_schema, interpret_prompt, general_prompt, query_cypher_schema
 from loguru import logger
 from langchain_community.graphs import MemgraphGraph
 
@@ -19,7 +19,7 @@ from settings import Settings
 class OpenAILLM(BaseLLM):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.chat = ChatOpenAI(api_key=settings.OPEN_AI_KEY, model="gpt-4", temperature=0)
+        self.chat_gpt4o = ChatOpenAI(api_key=settings.OPEN_AI_KEY, model="gpt-4o", temperature=0)
 
     def build_query_from_messages(self, llm_messages: List[LlmMessage]) -> Query:
         messages = [
@@ -33,7 +33,8 @@ class OpenAILLM(BaseLLM):
             else:
                 messages.append(AIMessage(content=llm_message.content))
         try:
-            ai_message = self.chat.invoke(messages)
+            ai_message = self.chat_gpt4o.invoke(messages)
+            #logger.info(f'ai_message using GPT-4  : {ai_message}')
             query = json.loads(ai_message.content)
             return Query(
                 network=NETWORK_BITCOIN,
@@ -43,6 +44,26 @@ class OpenAILLM(BaseLLM):
                 limit=query["limit"] if "limit" in query else None,
                 skip=query["skip"] if "skip" in query else None,
             )
+        except Exception as e:
+            logger.error(f"LlmQuery build error: {e}")
+            raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
+
+    def build_cypher_query_from_messages(self, llm_messages: List[LlmMessage]) -> str:
+        messages = [
+            SystemMessage(
+                content=query_cypher_schema
+            ),
+        ]
+        for llm_message in llm_messages:
+            if llm_message.type == LLM_MESSAGE_TYPE_USER:
+                messages.append(HumanMessage(content=llm_message.content))
+            else:
+                messages.append(AIMessage(content=llm_message.content))
+        try:
+            ai_message = self.chat_gpt4o.invoke(messages)
+            #logger.info(f'ai_message using GPT-4  : {ai_message}')
+            #query = json.loads(ai_message.content)
+            return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery build error: {e}")
             raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
@@ -60,7 +81,8 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
 
         try:
-            ai_message = self.chat.invoke(messages)
+            ai_message= self.chat_gpt4o.invoke(messages)
+            #logger.info(f'ai_message using GPT-4  : {ai_message}')
             return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery interpret result error: {e}")
@@ -79,7 +101,8 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
 
         try:
-            ai_message = self.chat.invoke(messages)
+            ai_message = self.chat_gpt4o.invoke(messages)
+            logger.info(f'ai_message using GPT-4  : {ai_message}')
             if ai_message == "not applicable questions":
                 raise Exception(LLM_ERROR_NOT_APPLICAPLE_QUESTIONS)
             else:
@@ -98,7 +121,7 @@ class OpenAILLM(BaseLLM):
 
         # Note: Creating the GraphCypherQAChain
         chain = MemgraphCypherQAChain.from_llm(ChatOpenAI(temperature=0.7), graph=graph, return_intermediate_steps=True,
-                                               verbose=True, model_name='gpt-4')
+                                               verbose=True, model_name='gpt-4o')
         # Note: Querying
         try:
             response = chain.run(llm_message)

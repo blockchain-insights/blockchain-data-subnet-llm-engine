@@ -34,6 +34,7 @@ class GraphSearchFactory:
 
 class BitcoinGraphSearch(BaseGraphSearch):
     def __init__(self, settings: Settings):
+        logger.info(f'Here is loaded configs {settings.GRAPH_DB_URL}')
         self.driver = GraphDatabase.driver(
             settings.GRAPH_DB_URL,
             auth=(settings.GRAPH_DB_USER, settings.GRAPH_DB_PASSWORD),
@@ -46,10 +47,15 @@ class BitcoinGraphSearch(BaseGraphSearch):
     def close(self):
         self.driver.close()
 
-    def execute_query(self, query: Query):
+    def execute_predefined_query(self, query: Query):
         cypher_query = QueryBuilder.build_query(query)
         logger.info(f"Executing cypher query: {cypher_query}")
         result = self.execute_cypher_query(cypher_query)
+        return result
+
+    def execute_query(self, query: str):
+        logger.info(f"Executing cypher query: {query}")
+        result = self.execute_cypher_query(query)
         return result
 
     def execute_cypher_query(self, cypher_query: str):

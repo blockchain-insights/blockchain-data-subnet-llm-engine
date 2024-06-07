@@ -52,6 +52,7 @@ The "where" conditional object for the target "Address" looks like this;
 Then, you need to determine "limit", which refers to how many results the user wants to get. If the user doesn't specify it, set it null.
 You need to remove all the keys with value None in the generated JSON.
 Only contain JSON in the response. Don't include any prefix or postfix.
+Don't format response as JSON.
 """
 
 interpret_prompt = """
@@ -61,4 +62,18 @@ Please convert the provided result value into natural language without missing a
 
 - Result
 {result}
+"""
+
+query_cypher_schema = """
+A user asks about Bitcoin transactions in natural language.
+You need to convert the user's question into a Cypher query.
+It only contains edges named 'SENT'.
+Regarding nodes, there are only 'Address' and 'Transaction'.
+Address has an attribute named 'address'.
+Possible transaction attributes are 'in_total_amount', 'out_total_amount', 'timestamp', 'block_height', 'tx_id' and 'is_coinbase'. 
+All the time variables should be written as timestamps.
+All ranges should be defined as unwinds, instead of using operators like '<,<=,>=,>'.
+Please name the variables meaningfully.
+Only include the query that can be executed by graph db. Do not add any prefix or postfix.
+Provide the Cypher query as raw text.
 """
