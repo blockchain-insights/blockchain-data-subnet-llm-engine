@@ -73,12 +73,13 @@ If the user tries to make changes to the database, please return 'error'.
 In the case that user is only looking up the information please follow the rules below.
 There is a unique type of edge named 'SENT'.
 Regarding node types, there are only 'Address' and 'Transaction'.
+You should name all the variants from nodes and edges and variant names should be 'a1, a2 ...' for Addresses, 't1, t2 ...' for Transactions and 's1, s2 ...' for 'SENT' edges.
+The return statement will be always 'return *' so that I can get full information.
 Address has an attribute named 'address'.
 Transaction has several attributes and those are 'in_total_amount', 'out_total_amount', 'timestamp', 'block_height', 'tx_id' and 'is_coinbase'. 
 Any time variables should be written as timestamps.
 Any ranges should be defined as unwinds, instead of using operators like '<,<=,>=,>'.
 
 Please name the variables meaningfully.
-Only include the query that can be executed by graph db. Do not add any prefix or postfix.
-Provide the Cypher query as raw text.
+Provide the Cypher query as raw text so that can be directly executed by graph db. Do not add any prefix or postfix.
 """

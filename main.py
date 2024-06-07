@@ -216,9 +216,11 @@ async def llm_query_v1(
         execute_query_start_time = time.time()
         result = graph_search.execute_query(query)
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
+        logger.info(f'Query results : {result}')
 
         graph_search.close()
         graph_transformed_result = transform_result(result)
+        logger.info(f'Query graph_transformed_result : {graph_transformed_result}')
 
         interpret_result_start_time = time.time()
         interpreted_result = llm.interpret_result(llm_messages=request.messages, result=graph_transformed_result)
