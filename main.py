@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 import __init__
 from data.bitcoin.balance_search import BalanceSearchFactory
 from data.bitcoin.graph_result_transformer import transform_result
+from data.bitcoin.tabular_result_transformer import transform_result_set
 from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
 from llm.factory import LLMFactory
 from settings import settings
@@ -268,14 +269,16 @@ async def llm_query_balance_v1(
         result = balance_search_factory.create_balance_search(request.network).execute_query(query)
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
 
+        tabular_transformed_result = transform_result_set(result)
+
         interpret_result_start_time = time.time()
-        interpreted_result = llm.interpret_result_balance_tracker(llm_messages=request.messages, result=result)
+        interpreted_result = llm.interpret_result_balance_tracker(llm_messages=request.messages, result=tabular_transformed_result)
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
             QueryOutput(type="graph", interpreted_result="interpreted_result"),
             QueryOutput(type="text", interpreted_result="interpreted_result"),
-            QueryOutput(type="table", result=result, interpreted_result=interpreted_result),
+            QueryOutput(type="table", result=tabular_transformed_result, interpreted_result=interpreted_result),
         ]
 
     except Exception as e:

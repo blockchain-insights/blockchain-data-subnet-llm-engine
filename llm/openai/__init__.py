@@ -50,21 +50,38 @@ class OpenAILLM(BaseLLM):
 
     def build_query_from_messages_balance_tracker(self, llm_messages: List[LlmMessage]) -> Query:
         balance_tracker_query_schema = """
-    You are an assistant to help me query balance changes.
-    I will ask you questions, and you will generate SQL queries to fetch the data.
+            You are an assistant to help me query balance changes.
+            I will ask you questions, and you will generate SQL queries to fetch the data.
 
-    The database table is called `balance_changes` and has the following columns:
-    - address (string)
-    - block (integer)
-    - d_balance (big integer)
-    - block_timestamp (timestamp)
+            There are three database tables:
 
-    For example:
-    "Return the address with the highest amount of BTC in December 2009."
+            1. `balance_changes` with the following columns:
+               - address (string): The address involved in the balance change.
+               - block (integer): The block in which the balance change occurred.
+               - d_balance (big integer): The change in balance.
+               - block_timestamp (timestamp): The timestamp of the block.
 
-    My question: {question}
-    SQL query:
-    """
+            2. `current_balances` with the following columns:
+               - address (string): The address of the user.
+               - balance (big integer): The current balance of the address.
+
+            3. `blocks` with the following columns:
+               - block_height (integer): The height of the block.
+               - timestamp (timestamp): The timestamp of the block.
+
+            Relationships:
+            - `balance_changes` is related to `current_balances` via the `address` field.
+            - `blocks` is related to `balance_changes` via the `block_height` (in `blocks`) and `block` (in `balance_changes`) fields.
+
+            You should be able to handle queries that span across these three tables. For questions on mined blocks and their timestamps, use the `blocks` table.
+
+            For example:
+            "Return the address with the highest amount of BTC in December 2009."
+
+            My question: {question}
+            SQL query:
+            """
+
         messages = [
             SystemMessage(
                 content=balance_tracker_query_schema
@@ -116,12 +133,32 @@ class OpenAILLM(BaseLLM):
 
     def interpret_result_balance_tracker(self, llm_messages: List[LlmMessage], result: list) -> str:
         balance_tracker_interpret_prompt = """
-        You are an assistant to interpret the results of a balance tracker query.
-        Here is the result set:
-        {result}
+            You are an assistant to interpret the results of a query involving balance changes, current balances, and block information.
+            Here is the result set:
+            {result}
 
-        Please summarize the balance changes in a user-friendly way.
-        """
+            The data comes from three tables:
+            1. `balance_changes` which includes balance changes over time with columns:
+               - address (string)
+               - block (integer)
+               - d_balance (big integer)
+               - block_timestamp (timestamp)
+
+            2. `current_balances` which includes the current balances for addresses with columns:
+               - address (string)
+               - balance (big integer)
+
+            3. `blocks` which includes information about blocks and their timestamps with columns:
+               - block_height (integer)
+               - timestamp (timestamp)
+
+            Relationships:
+            - `balance_changes` is related to `current_balances` via the `address` field.
+            - `blocks` is related to `balance_changes` via the `block_height` (in `blocks`) and `block` (in `balance_changes`) fields.
+
+            Please summarize the results in a user-friendly way.
+            """
+
         messages = [
             SystemMessage(
                 content=balance_tracker_interpret_prompt.format(result=result)
