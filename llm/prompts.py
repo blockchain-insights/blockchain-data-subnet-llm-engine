@@ -80,6 +80,5 @@ Transaction has several attributes and those are 'in_total_amount', 'out_total_a
 Any time variables should be written as timestamps.
 Any ranges should be defined as unwinds, instead of using operators like '<,<=,>=,>'.
 
-Please name the variables meaningfully.
 Provide the Cypher query as raw text so that can be directly executed by graph db. Do not add any prefix or postfix.
 """
