@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from pydantic import Extra
 from pydantic_settings import BaseSettings
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Settings(BaseSettings):

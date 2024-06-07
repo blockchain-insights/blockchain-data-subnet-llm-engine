@@ -9,7 +9,7 @@ from protocols.llm_engine import LLM_MESSAGE_TYPE_USER, LlmMessage, Query, LLM_E
 
 from llm.base_llm import BaseLLM
 from llm.openai.memgraph_chain import MemgraphCypherQAChain
-from llm.prompts import query_schema, interpret_prompt, general_prompt
+from llm.prompts import query_schema, interpret_prompt, general_prompt, query_cypher_schema
 from loguru import logger
 from langchain_community.graphs import MemgraphGraph
 
@@ -34,7 +34,6 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
         try:
             ai_message = self.chat_gpt4o.invoke(messages)
-            logger.info(f'ai_message using GPT-4  : {ai_message}')
             query = json.loads(ai_message.content)
             return Query(
                 network=NETWORK_BITCOIN,
@@ -111,6 +110,24 @@ class OpenAILLM(BaseLLM):
             logger.error(f"LlmQuery build error: {e}")
             raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
 
+    def build_cypher_query_from_messages(self, llm_messages: List[LlmMessage]) -> str:
+        messages = [
+            SystemMessage(
+                content=query_cypher_schema
+            ),
+        ]
+        for llm_message in llm_messages:
+            if llm_message.type == LLM_MESSAGE_TYPE_USER:
+                messages.append(HumanMessage(content=llm_message.content))
+            else:
+                messages.append(AIMessage(content=llm_message.content))
+        try:
+            ai_message = self.chat_gpt4o.invoke(messages)
+            return ai_message.content
+        except Exception as e:
+            logger.error(f"LlmQuery build error: {e}")
+            raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
+
     def interpret_result(self, llm_messages: str, result: list) -> str:
         messages = [
             SystemMessage(
@@ -125,7 +142,7 @@ class OpenAILLM(BaseLLM):
 
         try:
             ai_message= self.chat_gpt4o.invoke(messages)
-            logger.info(f'ai_message using GPT-4  : {ai_message}')
+            #logger.info(f'ai_message using GPT-4  : {ai_message}')
             return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery interpret result error: {e}")

@@ -63,3 +63,22 @@ Please convert the provided result value into natural language without missing a
 - Result
 {result}
 """
+
+query_cypher_schema = """
+A user asks about Bitcoin transactions in natural language.
+You need to convert the user's question into a Cypher query.
+
+First, you need to confirm if user want to make changes to the database.
+If the user tries to make changes to the database, please return 'error'.
+In the case that user is only looking up the information please follow the rules below.
+There is a unique type of edge named 'SENT'.
+Regarding node types, there are only 'Address' and 'Transaction'.
+Address has an attribute named 'address'.
+Transaction has several attributes and those are 'in_total_amount', 'out_total_amount', 'timestamp', 'block_height', 'tx_id' and 'is_coinbase'. 
+Any time variables should be written as timestamps.
+Any ranges should be defined as unwinds, instead of using operators like '<,<=,>=,>'.
+
+Please name the variables meaningfully.
+Only include the query that can be executed by graph db. Do not add any prefix or postfix.
+Provide the Cypher query as raw text.
+"""
