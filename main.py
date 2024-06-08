@@ -191,7 +191,7 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
 
 @v1_router.post("/process_prompt", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=Union[List[QueryOutput], Dict])
 async def llm_query_v1(
-        request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "Return 15 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
+        request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [{"type": 0, "content": "Return 3 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
         graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
 
@@ -203,17 +203,16 @@ async def llm_query_v1(
     llm = llm_factory.create_llm(request.llm_type)
 
     try:
-        query_start_time = time.time()
         graph_search = graph_search_factory.create_graph_search(request.network)
-
         query_start_time = time.time()
     
         query = llm.build_cypher_query_from_messages(request.messages).strip('`')
         logger.info(f"generated cypher query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
-        if(query == 'error'):
+        if query == 'error':
             logger.error("Modification is not allowed")
-            return {'error' : 'Modification is not allowed'}
+            return {'error': 'Modification is not allowed'}
+
         execute_query_start_time = time.time()
         result = graph_search.execute_query(query)
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")

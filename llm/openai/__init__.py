@@ -6,13 +6,13 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from protocols.blockchain import NETWORK_BITCOIN
 from protocols.llm_engine import LLM_MESSAGE_TYPE_USER, LlmMessage, Query, LLM_ERROR_QUERY_BUILD_FAILED, \
     LLM_ERROR_INTERPRETION_FAILED, LLM_ERROR_NOT_APPLICAPLE_QUESTIONS, LLM_ERROR_GENERAL_RESPONSE_FAILED
-
 from llm.base_llm import BaseLLM
 from llm.openai.memgraph_chain import MemgraphCypherQAChain
 from llm.prompts import query_schema, interpret_prompt, general_prompt, query_cypher_schema
 from loguru import logger
 from langchain_community.graphs import MemgraphGraph
 
+from llm.utils import split_messages_into_chunks
 from settings import Settings
 
 
@@ -20,6 +20,7 @@ class OpenAILLM(BaseLLM):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.chat_gpt4o = ChatOpenAI(api_key=settings.OPEN_AI_KEY, model="gpt-4o", temperature=0)
+        self.MAX_TOKENS = 128000
 
     def build_query_from_messages(self, llm_messages: List[LlmMessage]) -> Query:
         messages = [
@@ -141,9 +142,17 @@ class OpenAILLM(BaseLLM):
                 messages.append(AIMessage(content=llm_message.content))
 
         try:
-            ai_message= self.chat_gpt4o.invoke(messages)
-            #logger.info(f'ai_message using GPT-4  : {ai_message}')
-            return ai_message.content
+            message_chunks = split_messages_into_chunks(messages)
+            ai_responses = []
+
+            for chunk in message_chunks:
+                ai_message = self.chat_gpt4o.invoke(chunk)
+                ai_responses.append(ai_message.content)
+
+            # Combine the responses
+            combined_response = "\n".join(ai_responses)
+            return combined_response
+
         except Exception as e:
             logger.error(f"LlmQuery interpret result error: {e}")
             raise Exception(LLM_ERROR_INTERPRETION_FAILED)
