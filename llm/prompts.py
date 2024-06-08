@@ -81,4 +81,7 @@ Any time variables should be written as timestamps.
 Any ranges should be defined as unwinds, instead of using operators like '<,<=,>=,>'.
 
 Provide the Cypher query as raw text so that can be directly executed by graph db. Do not add any prefix or postfix.
+
+Example valid cypher query: 
+MATCH (a1:Address {address: 'bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r'})-[s1:SENT]->(t1:Transaction) RETURN * LIMIT 2
 """

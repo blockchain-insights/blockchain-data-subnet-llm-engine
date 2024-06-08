@@ -9,3 +9,4 @@ langchain_community
 blockchain-data-subnet-shared-libs==0.0.12
 psycopg2-binary
 sqlalchemy
+transformers
