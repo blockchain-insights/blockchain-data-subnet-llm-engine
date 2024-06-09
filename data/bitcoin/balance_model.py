@@ -16,27 +16,3 @@ class BalanceChange(Base):
         PrimaryKeyConstraint('address', 'block'),
         Index('idx_block_timestamp', 'block_timestamp')
     )
-
-
-class CurrentBalance(Base):
-    __tablename__ = 'current_balances'
-
-    address = Column(String, primary_key=True)
-    balance = Column(BigInteger)
-
-    __table_args__ = (
-        PrimaryKeyConstraint('address'),
-        Index('idx_balance', 'balance')
-    )
-
-
-class Block(Base):
-    __tablename__ = 'blocks'
-
-    block_height = Column(Integer, primary_key=True)
-    timestamp = Column(TIMESTAMP)
-
-    __table_args__ = (
-        PrimaryKeyConstraint('block_height'),
-        Index('idx_timestamp', 'timestamp')
-    )

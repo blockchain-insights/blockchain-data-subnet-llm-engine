@@ -53,7 +53,7 @@ class OpenAILLM(BaseLLM):
             You are an assistant to help me query balance changes.
             I will ask you questions, and you will generate SQL queries to fetch the data.
 
-            There are three database tables:
+            There are two database tables:
 
             1. `balance_changes` with the following columns:
                - address (string): The address involved in the balance change.
@@ -61,22 +61,21 @@ class OpenAILLM(BaseLLM):
                - d_balance (big integer): The change in balance.
                - block_timestamp (timestamp): The timestamp of the block.
 
-            2. `current_balances` with the following columns:
-               - address (string): The address of the user.
-               - balance (big integer): The current balance of the address.
-
-            3. `blocks` with the following columns:
+            2. `blocks` with the following columns:
                - block_height (integer): The height of the block.
                - timestamp (timestamp): The timestamp of the block.
 
             Relationships:
-            - `balance_changes` is related to `current_balances` via the `address` field.
-            - `blocks` is related to `balance_changes` via the `block_height` (in `blocks`) and `block` (in `balance_changes`) fields.
+            - there are no relationships between the tables.
 
-            You should be able to handle queries that span across these three tables. For questions on mined blocks and their timestamps, use the `blocks` table.
-
+            You should be able to handle queries that span across these two tables. 
+            For questions on mined blocks and their timestamps, use the `blocks` table.
+            For timeseries related questions on balance changes, use the `balance_changes` table.
+            For general questions, you can use both tables.
+            
             For example:
-            "Return the address with the highest amount of BTC in December 2009."
+            "Return the address with the highest amount of BTC in December 2009." this question can be answered using the `balance_changes` table.
+            "Return the block height of the block with the highest timestamp." this question can be answered using the `blocks` table.
 
             My question: {question}
             SQL query:
