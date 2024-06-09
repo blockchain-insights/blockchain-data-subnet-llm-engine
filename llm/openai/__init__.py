@@ -69,12 +69,14 @@ class OpenAILLM(BaseLLM):
             - there are no relationships between the tables.
 
             You should be able to handle queries that span across these two tables. 
-            For questions on mined blocks and their timestamps, use the `blocks` table.
-            For timeseries related questions on balance changes, use the `balance_changes` table.
-            For general questions, you can use both tables.
+            The `balance_changes` table contains the balance changes over time for different addresses. 
+            The `blocks` table contains information about the blocks and their timestamps.
+            
             
             For example:
-            "Return the address with the highest amount of BTC in December 2009." this question can be answered using the `balance_changes` table.
+            "Return the address with the highest amount of BTC in December 2009." this question can be answered using the `balance_changes` table, take specific date and address with highest balance, do not SUM the balance.
+            The data in this table is preprocessed and ready to be queried.
+            
             "Return the block height of the block with the highest timestamp." this question can be answered using the `blocks` table.
 
             My question: {question}
