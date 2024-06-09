@@ -8,4 +8,4 @@ def transform_result_set(result):
     # Populate the content based on the result set
     content = [{**item} for item in result]
 
-    return [{"columns": columns, "content": content}]
+    return [{"columns": columns, "rows": content}]
