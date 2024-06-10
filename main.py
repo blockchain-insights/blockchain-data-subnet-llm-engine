@@ -259,17 +259,16 @@ async def llm_query_v1(
     return output
 
 
-@v1_router.post("/process_prompt_switch", summary="Determine proper model to be prompted", description="", tags=["v1"],
-                response_model=SwitchResponse)
+@v1_router.post("/process_prompt_switch", summary="Determinate proper model to be prompted", description="", tags=["v1"], response_model=SwitchResponse)
 async def llm_query_switch_v1(
         request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [
             {"type": 0,
-             "content": "Return me top 3 addresses that have the highest current balances plus return blocks and timestamps."}]}),
-        llm_factory: LLMFactory = Depends(get_llm_factory)):
-    llm = llm_factory.create_llm(request.llm_type)
-    model_type = llm.determine_model_type(request.messages)
+             "content": "Return 3 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
+        llm_factory: LLMFactory = Depends(get_llm_factory),
+        graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory),
+        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
 
-    return SwitchResponse(model=model_type)
+    return SwitchResponse(model="funds_flow")
 
 
 @v1_router.post("/process_prompt_funds_flow", summary="Executes user prompt", description="Execute user prompt and return the result", tags=["v1"], response_model=Union[List[QueryOutput], Dict])
