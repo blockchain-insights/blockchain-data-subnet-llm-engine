@@ -130,6 +130,72 @@ class OpenAILLM(BaseLLM):
             logger.error(f"LlmQuery build error: {e}")
             raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
 
+    def determine_model_type(self, llm_messages: List[LlmMessage]) -> str:
+        classification_prompt = """
+        You are an assistant that classifies prompts into two categories: "Funds Flow" and "Balance Tracking". Your task is to identify the type of each prompt given to you. Here are the definitions and examples for each category:
+
+        **Funds Flow**:
+        Questions related to specific transactions, including outgoing and incoming transactions, transactions related to a particular address in a specific block, and tracing where funds were transferred from an address.
+
+        Examples:
+        1. Return 15 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r.
+        2. Show me 20 transactions incoming to my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r.
+        3. I have sent more than 1.5 BTC to somewhere but I couldn't remember. Show me 30 relevant transactions.
+        4. My address is bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r. Show 10 transactions related to my address in the block 402913.
+        5. Show where funds were transferred from address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r.
+
+        **Balance Tracking**:
+        Questions related to the current or historical balance of addresses, including identifying addresses with the highest balances and retrieving mined blocks and their timestamps.
+
+        Examples:
+        1. Return me top 3 addresses that have the highest current balances plus return blocks and timestamps.
+        2. Return me the address that has the highest current balance over time.
+        3. Return me the address who had the highest amount of BTC in 2009-01.
+        4. Return me all mined blocks and their timestamps.
+        5. Show me the top 3 blocks that have the highest balance.
+
+        Given a prompt, classify it as either "Funds Flow" or "Balance Tracking". For example:
+
+        1. "Show me 20 transactions incoming to my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r."
+        - Classification: Funds Flow
+
+        2. "Return me the address that has the highest current balance over time."
+        - Classification: Balance Tracking
+
+        Classify the following prompt:
+        {prompt}
+        """
+
+        messages = [
+            SystemMessage(
+                content=classification_prompt
+            ),
+        ]
+        for llm_message in llm_messages:
+            if llm_message.type == LLM_MESSAGE_TYPE_USER:
+                messages.append(HumanMessage(content=llm_message.content))
+            else:
+                messages.append(AIMessage(content=llm_message.content))
+
+        try:
+            ai_message = self.chat_gpt4o.invoke(messages)
+            logger.info(f'ai_message using GPT-4: {ai_message}')
+
+            # Log the entire response content
+            logger.debug(f"AI message content: {ai_message.content}")
+
+            # Extract the classification from the response
+            if "Funds Flow" in ai_message.content:
+                return "funds_flow"
+            elif "Balance Tracking" in ai_message.content:
+                return "balance_tracking"
+            else:
+                logger.error("Received invalid classification from AI response")
+                raise Exception("LLM_ERROR_CLASSIFICATION_FAILED")
+        except Exception as e:
+            logger.error(f"LlmQuery classification error: {e}")
+            raise Exception("LLM_ERROR_CLASSIFICATION_FAILED")
+
     def interpret_result(self, llm_messages: str, result: list) -> str:
         messages = [
             SystemMessage(
