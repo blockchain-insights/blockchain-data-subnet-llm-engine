@@ -301,9 +301,9 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        error_code = e.args[0] if len(e.args) > 0 else 'unknown_error'
+        error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
         output = [
-            QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(type="error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     return output
 
@@ -335,7 +335,7 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
         logger.error(traceback.format_exc())
         error_code = e.args[0] if len(e.args) > 0 else 'unknown_error'
         output = [
-            QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(type="error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     return output
 
