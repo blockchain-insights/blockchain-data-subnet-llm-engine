@@ -249,7 +249,8 @@ class OpenAILLM(BaseLLM):
             - `balance_changes` is related to `current_balances` via the `address` field.
             - `blocks` is related to `balance_changes` via the `block_height` (in `blocks`) and `block` (in `balance_changes`) fields.
 
-            Please summarize the results in a user-friendly way.
+            Please summarize the results in a user-friendly way. If there are no results available, please let the user know with a simple and clear message. 
+            Don't talk about rows and result sets, only high-level info.
             """
 
         messages = [
