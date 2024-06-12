@@ -8,7 +8,7 @@ from pathlib import Path as FilePath
 import protocols.blockchain
 from loguru import logger
 from fastapi import FastAPI, Request, Depends, Query, Body, APIRouter, HTTPException
-from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES, LLM_UNKNOWN_ERROR
+from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
@@ -224,9 +224,9 @@ async def llm_query_v1(
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
+        error_code = e.args[0] if len(e.args) > 0 else 'unknown_error'
         output = [
-            QueryOutput(type = "error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
@@ -301,9 +301,9 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
+        error_code = e.args[0] if len(e.args) > 0 else 'unknown_error'
         output = [
-            QueryOutput(type="error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     return output
 
@@ -333,9 +333,9 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
+        error_code = e.args[0] if len(e.args) > 0 else 'unknown_error'
         output = [
-            QueryOutput(type="error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     return output
 

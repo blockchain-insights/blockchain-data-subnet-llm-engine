@@ -1,6 +1,6 @@
 def transform_result_set(result):
     if not result:
-        return [{"columns": [], "rows": []}]
+        return {"columns": [], "rows": []}
 
     # Dynamically generate columns based on the keys in the first result item
     columns = [{"name": key, "label": key.title()} for key in result[0].keys()]
