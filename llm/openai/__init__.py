@@ -14,7 +14,7 @@ from langchain_community.graphs import MemgraphGraph
 
 from llm.utils import split_messages_into_chunks
 from settings import Settings
-from shared.helpers import blob_reader
+from shared.helpers.blob_reader import download_blob_content
 
 
 class OpenAILLM(BaseLLM):
@@ -51,8 +51,8 @@ class OpenAILLM(BaseLLM):
 
     def build_query_from_messages_balance_tracker(self, llm_messages: List[LlmMessage]) -> Query:
 
-        blob_path = "bitcoin/balancer_tracker/query_prompt"
-        prompt = download_blob_content(CONNECTION_STRING, CONTAINER_NAME, blob_path)
+        blob_path = "bitcoin/balance_tracking/query_prompt"
+        prompt = download_blob_content(blob_path)
         if prompt:
             logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
@@ -92,7 +92,7 @@ class OpenAILLM(BaseLLM):
     def build_cypher_query_from_messages(self, llm_messages: List[LlmMessage]) -> str:
 
         blob_path = "bitcoin/funds_flow/query_prompt"
-        prompt = download_blob_content(CONNECTION_STRING, CONTAINER_NAME, blob_path)
+        prompt = download_blob_content(blob_path)
         if prompt:
             logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
@@ -120,7 +120,7 @@ class OpenAILLM(BaseLLM):
     def determine_model_type(self, llm_messages: List[LlmMessage]) -> str:
 
         blob_path = "classification/classification_prompt"
-        prompt = download_blob_content(CONNECTION_STRING, CONTAINER_NAME, blob_path)
+        prompt = download_blob_content(blob_path)
         if prompt:
             logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
@@ -161,7 +161,7 @@ class OpenAILLM(BaseLLM):
     def interpret_result(self, llm_messages: str, result: list) -> str:
 
         blob_path = "bitcoin/funds_flow/interpretation_prompt"
-        prompt = download_blob_content(CONNECTION_STRING, CONTAINER_NAME, blob_path)
+        prompt = download_blob_content(blob_path)
         if prompt:
             logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
@@ -198,8 +198,8 @@ class OpenAILLM(BaseLLM):
 
     def interpret_result_balance_tracker(self, llm_messages: List[LlmMessage], result: list) -> str:
 
-        blob_path = "bitcoin/balancer_tracker/interpretation_prompt"
-        prompt = download_blob_content(CONNECTION_STRING, CONTAINER_NAME, blob_path)
+        blob_path = "bitcoin/balance_tracking/interpretation_prompt"
+        prompt = download_blob_content(blob_path)
         if prompt:
             logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
