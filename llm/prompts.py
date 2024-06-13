@@ -65,25 +65,40 @@ Please convert the provided result value into natural language without missing a
 """
 
 query_cypher_schema = """
-A user asks about Bitcoin transactions in natural language.
-You need to convert the user's question into a Cypher query.
-
-First, you need to confirm if user want to make changes to the database.
+First, you need to confirm if the user wants to make changes to the database.
 If the user tries to make changes to the database, please return 'error'.
-In the case that user is only looking up the information please follow the rules below.
+In the case that the user is only looking up the information, please follow the rules below.
+
 There is a unique type of edge named 'SENT'.
 Regarding node types, there are only 'Address' and 'Transaction'.
-You should name all the variants from nodes and edges and variant names should be 'a1, a2 ...' for Addresses, 't1, t2 ...' for Transactions and 's1, s2 ...' for 'SENT' edges.
-The return statement will be always 'return *' so that I can get full information.
+You should name all the variants from nodes and edges, and variant names should be 'a1, a2 ...' for Addresses, 't1, t2 ...' for Transactions and 's1, s2 ...' for 'SENT' edges.
+The return statement will always be 'return *' so that I can get full information.
 Address has an attribute named 'address'.
-Transaction has several attributes and those are 'in_total_amount', 'out_total_amount', 'timestamp', 'block_height', 'tx_id' and 'is_coinbase'. 
+Transaction has several attributes and those are 'in_total_amount', 'out_total_amount', 'timestamp', 'block_height', 'tx_id' and 'is_coinbase'.
 Any time variables should be written as timestamps.
 Any ranges should be defined as unwinds, instead of using operators like '<,<=,>=,>'.
 
-Provide the Cypher query as raw text so that can be directly executed by graph db. Do not add any prefix or postfix.
+Provide the Cypher query as raw text so that it can be directly executed by the graph database. Do not add any prefix or postfix.
 
-Example valid cypher query: 
-MATCH (a1:Address {address: 'bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r'})-[s1:SENT]->(t1:Transaction) RETURN * LIMIT 2
+For queries involving transactions and associated details, include all related nodes and edges, such as:
+- Transactions sent from the specified address.
+- Addresses receiving funds from those transactions.
+
+Ensure to include the 'SENT' edges in both directions (from the specified address to the transaction and from the transaction to other addresses).
+
+For example, if the user asks for the last transaction, include the address and all related transactions and addresses.
+
+Example valid Cypher query:
+MATCH (a1:Address {address: 'bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r'})-[s1:SENT]->(t1:Transaction)-[s2:SENT]->(a2:Address)
+RETURN *
+ORDER BY t1.timestamp DESC
+LIMIT 1
+
+In the case of a query like "what is my last transaction?", ensure the query returns not only the transaction but also all related addresses and SENT edges.
+
+Any Cypher query that attempts to modify the database (e.g., using CREATE, DELETE, SET, or MERGE) should immediately return 'error' to avoid any unauthorized changes.
+
+Please write the Cypher query in raw text without any additional formatting or comments, ensuring it adheres to the above rules.
 """
 
 balance_tracker_query_schema = """
