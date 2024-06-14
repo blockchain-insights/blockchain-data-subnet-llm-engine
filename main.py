@@ -169,7 +169,7 @@ async def challenge_v1(network: str,
 
 
 @v1_router.get("/benchmark/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
-async def benchmark_v1(network: str, query: str = Query(..., description="Query to benchmark")):
+async def benchmark_v1(network: str, query: str = Query(..., description="Query to benchmark"), query_type: str = 'funds_flow'):
     def is_query_only(query_restricted_keywords, cypher_query):
         normalized_query = cypher_query.upper()
         for keyword in query_restricted_keywords:
@@ -183,13 +183,22 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
-        graph_search = get_graph_search(settings, network)
-        output = graph_search.execute_benchmark_query(query)
-        graph_search.close()
-        return {
-            "network": network,
-            "output": output[0],
-        }
+        if query_type == 'funds_flow':
+            graph_search = get_graph_search(settings, network)
+            output = graph_search.execute_benchmark_query(query)
+            graph_search.close()
+            return {
+                "network": network,
+                "output": output[0],
+            }
+        elif query_type == 'balance':
+            balance_search = get_balance_search_factory()
+            output = balance_search.execute_query(query)
+            balance_search.close()
+            return {
+                "network": network,
+                "output": output,
+            }
 
     else:
         raise HTTPException(status_code=400, detail="Invalid network")
