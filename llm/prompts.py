@@ -96,6 +96,14 @@ LIMIT 1
 
 In the case of a query like "what is my last transaction?", ensure the query returns not only the transaction but also all related addresses and SENT edges.
 
+For queries involving block height ranges, use UNWIND to define the range instead of operators like <, <=, >=, > for better performance.
+
+Example query for block height range:
+WITH range(0, 8000) AS block_range
+UNWIND block_range AS block_height
+MATCH (a1:Address {address: 'bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r'})-[s1:SENT]->(t1:Transaction {block_height: block_height})-[s2:SENT]->(a2:Address)
+RETURN *
+
 Any Cypher query that attempts to modify the database (e.g., using CREATE, DELETE, SET, or MERGE) should immediately return 'error' to avoid any unauthorized changes.
 
 Please write the Cypher query in raw text without any additional formatting or comments, ensuring it adheres to the above rules.
