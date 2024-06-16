@@ -57,11 +57,44 @@ Don't format response as JSON.
 
 interpret_prompt = """
 A user asks about bitcoin transactions in natural language. You will be provided the entire chat history.
-You will also be provided the result value as JSON array, which contains all the answers.
-Please convert the provided result value into natural language without missing any information.
+You will also be provided the result value as a JSON array, which contains all the answers.
 
-- Result
-{result}
+The result set is here:
+{{result}}
+
+Please convert the provided dataset into natural language without missing any information.
+
+For example, if the dataset contains:
+
+{{
+  "dataset": [
+    {{
+      "address": "bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r",
+      "transactions": [
+        {{
+          "tx_id": "61776e6588d1356bcf299c51afc356a0c32f983c4f6b8e2a81395fa4993b6ad5",
+          "amount": 0.00875000,
+          "to_address": "3AJhcYRMwgyvzJpjFyrZYkbHapbpB9rDcv"
+        }},
+        {{
+          "tx_id": "ce32f68c7f3ffe8d77d72d7bf23be9d2541c0b14d32b411ef8cd82e92ee68261",
+          "amount": 0.09343120,
+          "to_address": "32DkonW1SfVoHJupeekPb1Pw2cqMf9GcEv"
+        }}
+      ]
+    }}
+  ]
+}}
+
+The output should be:
+
+"Here is the information about the Bitcoin transactions for address `bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r`:
+
+1. Sent 0.00875000 BTC to `3AJhcYRMwgyvzJpjFyrZYkbHapbpB9rDcv` in transaction `61776e6588d1356bcf299c51afc356a0c32f983c4f6b8e2a81395fa4993b6ad5`.
+2. Sent 0.09343120 BTC to `32DkonW1SfVoHJupeekPb1Pw2cqMf9GcEv` in transaction `ce32f68c7f3ffe8d77d72d7bf23be9d2541c0b14d32b411ef8cd82e92ee68261`.
+
+Please ensure all information is extracted and converted into natural language format without suggesting the use of any third-party tools or resources. Only our tool should be referenced for providing information.
+
 """
 
 query_cypher_schema = """
