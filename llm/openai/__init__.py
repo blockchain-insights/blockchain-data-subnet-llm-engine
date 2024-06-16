@@ -1,17 +1,14 @@
-import os
-import json
-from typing import Any, Dict, List, Optional
+from typing import List
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from protocols.blockchain import NETWORK_BITCOIN
 from protocols.llm_engine import LLM_MESSAGE_TYPE_USER, LlmMessage, Query, LLM_ERROR_QUERY_BUILD_FAILED, \
     LLM_ERROR_INTERPRETION_FAILED, LLM_ERROR_NOT_APPLICAPLE_QUESTIONS, LLM_ERROR_GENERAL_RESPONSE_FAILED
 from llm.base_llm import BaseLLM
 from llm.openai.memgraph_chain import MemgraphCypherQAChain
-from llm.prompts import query_schema, interpret_prompt, general_prompt, query_cypher_schema, balance_tracker_query_schema, balance_tracker_interpret_prompt, classification_prompt
+from llm.prompts import  (interpret_prompt, general_prompt, query_cypher_schema, balance_tracker_query_schema,
+                          balance_tracker_interpret_prompt, classification_prompt)
 from loguru import logger
 from langchain_community.graphs import MemgraphGraph
-
 from llm.utils import split_messages_into_chunks
 from settings import Settings
 from shared.helpers.blob_reader import download_blob_content
@@ -23,33 +20,7 @@ class OpenAILLM(BaseLLM):
         self.chat_gpt4o = ChatOpenAI(api_key=settings.OPEN_AI_KEY, model="gpt-4o", temperature=0)
         self.MAX_TOKENS = 128000
 
-    def build_query_from_messages(self, llm_messages: List[LlmMessage]) -> Query:
-        messages = [
-            SystemMessage(
-                content=query_schema
-            ),
-        ]
-        for llm_message in llm_messages:
-            if llm_message.type == LLM_MESSAGE_TYPE_USER:
-                messages.append(HumanMessage(content=llm_message.content))
-            else:
-                messages.append(AIMessage(content=llm_message.content))
-        try:
-            ai_message = self.chat_gpt4o.invoke(messages)
-            query = json.loads(ai_message.content)
-            return Query(
-                network=NETWORK_BITCOIN,
-                type=query["type"] if "type" in query else None,
-                target=query["target"] if "target" in query else None,
-                where=query["where"] if "where" in query else None,
-                limit=query["limit"] if "limit" in query else None,
-                skip=query["skip"] if "skip" in query else None,
-            )
-        except Exception as e:
-            logger.error(f"LlmQuery build error: {e}")
-            raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
-
-    def build_query_from_messages_balance_tracker(self, llm_messages: List[LlmMessage]) -> Query:
+    def build_query_from_messages_balance_tracker(self, llm_messages: List[LlmMessage]):
 
         blob_path = "bitcoin/balance_tracking/query_prompt"
         prompt = download_blob_content(blob_path)
