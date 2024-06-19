@@ -192,7 +192,8 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
                 "output": output[0],
             }
         elif query_type == 'balance':
-            balance_search = get_balance_search_factory()
+            balance_search_factory = get_balance_search_factory()
+            balance_search = balance_search_factory.create_balance_search(network)
             output = balance_search.execute_query(query)
             balance_search.close()
             return {
