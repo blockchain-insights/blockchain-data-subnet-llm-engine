@@ -8,7 +8,8 @@ from pathlib import Path as FilePath
 import protocols.blockchain
 from loguru import logger
 from fastapi import FastAPI, Request, Depends, Query, Body, APIRouter, HTTPException
-from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES, LLM_UNKNOWN_ERROR
+from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES, \
+    LLM_UNKNOWN_ERROR, MODEL_TYPE_BALANCE_TRACKING, MODEL_TYPE_FUNDS_FLOW
 from pydantic import BaseModel, Field
 from starlette.responses import JSONResponse
 
@@ -183,7 +184,7 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
-        if query_type == 'funds_flow':
+        if query_type == MODEL_TYPE_FUNDS_FLOW:
             graph_search = get_graph_search(settings, network)
             output = graph_search.execute_benchmark_query(query)
             graph_search.close()
@@ -191,15 +192,17 @@ async def benchmark_v1(network: str, query: str = Query(..., description="Query 
                 "network": network,
                 "output": output[0],
             }
-        elif query_type == 'balance':
+        elif query_type == MODEL_TYPE_BALANCE_TRACKING:
             balance_search_factory = get_balance_search_factory()
             balance_search = balance_search_factory.create_balance_search(network)
-            output = balance_search.execute_query(query)
+            output = balance_search.execute_benchmark_query(query)
             balance_search.close()
             return {
                 "network": network,
                 "output": output,
             }
+        else:
+            raise HTTPException(status_code=400, detail="Invalid query type")
 
     else:
         raise HTTPException(status_code=400, detail="Invalid network")

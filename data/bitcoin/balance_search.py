@@ -14,6 +14,9 @@ class BaseBalanceSearch:
     def execute_query(self, query: str):
         """Execute a query and return the result."""
 
+    def execute_benchmark_query(self, query: str):
+        """Execute a query and return the result."""
+
     def get_latest_block_number(self):
         """Get the latest block number."""
 
@@ -74,3 +77,27 @@ class BitcoinBalanceSearch(BaseBalanceSearch):
         except SQLAlchemyError as e:
             logger.error(f"An error occurred: {str(e)}")
             return []
+
+    def execute_benchmark_query(self, query: str):
+        # Basic check to disallow DDL queries
+        ddl_keywords = ["CREATE", "ALTER", "DROP", "TRUNCATE", "INSERT", "UPDATE", "DELETE"]
+
+        if any(keyword in query.upper() for keyword in ddl_keywords):
+            raise ValueError("DDL queries are not allowed. Only data selection queries are permitted.")
+
+        try:
+            with self.Session() as session:
+                logger.info(f"Executing sql query: {query}")
+
+                result = session.execute(text(query))
+                first_row = result.fetchone()
+                if first_row is not None:
+                    # Return the first column of the first row
+                    return first_row[0]
+                else:
+                    # Return None if there are no rows
+                    return None
+
+        except SQLAlchemyError as e:
+            logger.error(f"An error occurred: {str(e)}")
+            return None
