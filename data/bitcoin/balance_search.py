@@ -42,7 +42,7 @@ class BitcoinBalanceSearch(BaseBalanceSearch):
                                          f"postgresql://postgres:changeit456$@localhost:5432/miner")
         else:
             self.db_url = db_url
-        self.engine = create_engine(db_url)
+        self.engine = create_engine(self.db_url)
         self.Session = sessionmaker(bind=self.engine)
 
     def close(self):
@@ -77,6 +77,24 @@ class BitcoinBalanceSearch(BaseBalanceSearch):
         except SQLAlchemyError as e:
             logger.error(f"An error occurred: {str(e)}")
             return []
+
+    def execute_bitcoin_balance_challenge(self, block_height: int):
+        try:
+            with self.Session() as session:
+                logger.info(f"Executing balance tracking challenge query for block height: {block_height}")
+                query_results = session.query(BalanceChange).filter(BalanceChange.block == block_height).all()
+
+            changes = {}
+
+            for record in query_results:
+                changes[record.address] = record.d_balance
+
+            return changes
+
+        except SQLAlchemyError as e:
+            logger.error(f"An error occurred: {str(e)}")
+            return None
+
 
     def execute_benchmark_query(self, query: str):
         # Basic check to disallow DDL queries

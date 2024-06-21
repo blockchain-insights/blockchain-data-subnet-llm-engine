@@ -11,10 +11,9 @@ from fastapi import FastAPI, Request, Depends, Query, Body, APIRouter, HTTPExcep
 from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES, \
     LLM_UNKNOWN_ERROR, MODEL_TYPE_BALANCE_TRACKING, MODEL_TYPE_FUNDS_FLOW
 from pydantic import BaseModel, Field
-from starlette.responses import JSONResponse
 
 import __init__
-from data.bitcoin.balance_search import BalanceSearchFactory
+from data.bitcoin.balance_search import BalanceSearchFactory, BitcoinBalanceSearch
 from data.bitcoin.graph_result_transformer import transform_result
 from data.bitcoin.tabular_result_transformer import transform_result_set
 from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
@@ -33,10 +32,10 @@ from typing import Dict, Union
 app = FastAPI(
     title="Blockchain Insights LLM ENGINE",
     description="API designed to execute user prompts related to blockchain queries using LLM agents. It integrates with different LLMs and graph search functionalities to process and interpret blockchain data.",
-    version=__init__.__version__,)
+    version=__init__.__version__, )
 
-
-benchmark_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX', 'CREATE CONSTRAINT', 'DROP CONSTRAINT']
+benchmark_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX',
+                                 'CREATE CONSTRAINT', 'DROP CONSTRAINT']
 
 
 def get_llm_factory() -> LLMFactory:
@@ -54,7 +53,7 @@ def get_balance_search_factory() -> BalanceSearchFactory:
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     try:
-        response = await asyncio.wait_for(call_next(request), timeout=3*60)
+        response = await asyncio.wait_for(call_next(request), timeout=3 * 60)
         return response
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail=f"Request timeout: {request.method} {request.url}")
@@ -86,12 +85,14 @@ v1_router = APIRouter()
 valid_networks = [protocols.blockchain.NETWORK_BITCOIN, protocols.blockchain.NETWORK_ETHEREUM]
 
 
-@v1_router.get("/networks", summary="Get supported networks", description="Get the list of supported networks", tags=["v1"])
+@v1_router.get("/networks", summary="Get supported networks", description="Get the list of supported networks",
+               tags=["v1"])
 async def get_networks():
     return {"networks": valid_networks}
 
 
-@v1_router.get("/schema/{network}", summary="Get schema for network", description="Get the schema for the specified network", tags=["v1"])
+@v1_router.get("/schema/{network}", summary="Get schema for network",
+               description="Get the schema for the specified network", tags=["v1"])
 async def get_schema(network: str):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
@@ -108,7 +109,8 @@ async def get_schema(network: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@v1_router.get("/discovery/{network}", summary="Get network discovery", description="Get the network discovery details", tags=["v1"])
+@v1_router.get("/discovery/{network}", summary="Get network discovery", description="Get the network discovery details",
+               tags=["v1"])
 async def discovery_v1(network: str,
                        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
     if network not in valid_networks:
@@ -135,17 +137,17 @@ async def discovery_v1(network: str,
                summary="Solve challenge",
                description="Solve the challenge", tags=["v1"])
 async def challenge_v1(network: str,
-                            in_total_amount: int = Query(None, description="Input total amount"),
-                            out_total_amount: int = Query(None, description="Output total amount"),
-                            tx_id_last_4_chars: str = Query(None, description="Transaction ID last 4 characters"),
-                            checksum: str = Query(None, description="Checksum query parameter")):
-
+                       in_total_amount: int = Query(None, description="Input total amount"),
+                       out_total_amount: int = Query(None, description="Output total amount"),
+                       tx_id_last_4_chars: str = Query(None, description="Transaction ID last 4 characters"),
+                       checksum: str = Query(None, description="Checksum query parameter")):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
 
     if network == protocols.blockchain.NETWORK_BITCOIN:
         if in_total_amount is None or out_total_amount is None or tx_id_last_4_chars is None:
-            raise HTTPException(status_code=400, detail="Missing required query parameters for Bitcoin network, required: in_total_amount, out_total_amount, tx_id_last_4_chars")
+            raise HTTPException(status_code=400,
+                                detail="Missing required query parameters for Bitcoin network, required: in_total_amount, out_total_amount, tx_id_last_4_chars")
         graph_search = get_graph_search(settings, network)
         output = graph_search.solve_challenge(
             in_total_amount=in_total_amount,
@@ -169,8 +171,33 @@ async def challenge_v1(network: str,
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
+@v1_router.get("/balance_tracking/",
+               summary="Solve balance tracking challenge",
+               description="Solve the balance tracking challenge", tags=["v1"])
+async def balance_challenge_v1(network: str,
+                               block_height: int = Query(None, description="Block height query parameter")):
+    if network not in valid_networks:
+        raise HTTPException(status_code=400, detail="Invalid network")
+
+    if network == protocols.blockchain.NETWORK_BITCOIN:
+        if block_height is None:
+            raise HTTPException(status_code=400,
+                                detail="Missing required query parameters for Bitcoin network, required: block_height")
+
+        balance_tracking = BitcoinBalanceSearch()
+        output = balance_tracking.execute_bitcoin_balance_challenge(block_height)
+
+        return {
+                "network": network,
+                "output": output,
+                }
+    else:
+        raise HTTPException(status_code=400, detail="Invalid network")
+
+
 @v1_router.get("/benchmark/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
-async def benchmark_v1(network: str, query: str = Query(..., description="Query to benchmark"), query_type: str = 'funds_flow'):
+async def benchmark_v1(network: str, query: str = Query(..., description="Query to benchmark"),
+                       query_type: str = 'funds_flow'):
     def is_query_only(query_restricted_keywords, cypher_query):
         normalized_query = cypher_query.upper()
         for keyword in query_restricted_keywords:
@@ -239,7 +266,8 @@ async def llm_query_v1(
         logger.error(traceback.format_exc())
         error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
         output = [
-            QueryOutput(type = "error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(type="error", error=error_code,
+                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
@@ -316,7 +344,8 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
         logger.error(traceback.format_exc())
         error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
         output = [
-            QueryOutput(type="error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(type="error", error=error_code,
+                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     return output
 
@@ -348,8 +377,10 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
         logger.error(traceback.format_exc())
         error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
         output = [
-            QueryOutput(type="error", error=error_code, interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(type="error", error=error_code,
+                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     return output
+
 
 app.include_router(v1_router, prefix="/v1")
