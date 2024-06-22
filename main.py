@@ -34,7 +34,10 @@ app = FastAPI(
     description="API designed to execute user prompts related to blockchain queries using LLM agents. It integrates with different LLMs and graph search functionalities to process and interpret blockchain data.",
     version=__init__.__version__, )
 
-benchmark_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX',
+benchmark_funds_flow_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX',
+                                 'CREATE CONSTRAINT', 'DROP CONSTRAINT']
+
+benchmark_balance_tracking_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX',
                                  'CREATE CONSTRAINT', 'DROP CONSTRAINT']
 
 
@@ -135,24 +138,24 @@ async def discovery_v1(network: str,
 
 @v1_router.get("/challenge/funds_flow/{network}",
                summary="Solve challenge",
-               description="Solve the challenge", tags=["v1"])
-async def challenge_v1(network: str,
+               description="Solve the funds flow challenge", tags=["v1"])
+async def challenge_funds_flow_v1(network: str,
                        in_total_amount: int = Query(None, description="Input total amount"),
                        out_total_amount: int = Query(None, description="Output total amount"),
-                       tx_id_last_4_chars: str = Query(None, description="Transaction ID last 4 characters"),
+                       tx_id_last_6_chars: str = Query(None, description="Transaction ID last 6 characters"),
                        checksum: str = Query(None, description="Checksum query parameter")):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
 
     if network == protocols.blockchain.NETWORK_BITCOIN:
-        if in_total_amount is None or out_total_amount is None or tx_id_last_4_chars is None:
+        if in_total_amount is None or out_total_amount is None or tx_id_last_6_chars is None:
             raise HTTPException(status_code=400,
                                 detail="Missing required query parameters for Bitcoin network, required: in_total_amount, out_total_amount, tx_id_last_4_chars")
         graph_search = get_graph_search(settings, network)
         output = graph_search.solve_challenge(
             in_total_amount=in_total_amount,
             out_total_amount=out_total_amount,
-            tx_id_last_4_chars=tx_id_last_4_chars
+            tx_id_last_6_chars=tx_id_last_6_chars
         )
         graph_search.close()
         return {
@@ -174,7 +177,7 @@ async def challenge_v1(network: str,
 @v1_router.get("/challenge/balance_tracking/{network}",
                summary="Solve balance tracking challenge",
                description="Solve the balance tracking challenge", tags=["v1"])
-async def balance_challenge_v1(network: str,
+async def challenge_balance_tracking_v1(network: str,
                                block_height: int = Query(None, description="Block height query parameter")):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
@@ -195,44 +198,39 @@ async def balance_challenge_v1(network: str,
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
-@v1_router.get("/benchmark/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
-async def benchmark_v1(network: str, query: str = Query(..., description="Query to benchmark"),
-                       query_type: str = 'funds_flow'):
-    def is_query_only(query_restricted_keywords, cypher_query):
-        normalized_query = cypher_query.upper()
-        for keyword in query_restricted_keywords:
-            if keyword in normalized_query:
-                return False
-        return True
-
-    if not is_query_only(benchmark_restricted_keywords, query):
+@v1_router.get("/benchmark/funds_flow/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
+async def benchmark_funds_flow_v1(network: str, query: str = Query(..., description="Query to benchmark")):
+    if not is_query_only(benchmark_funds_flow_restricted_keywords, query):
         raise HTTPException(status_code=400, detail="Invalid query, restricted keywords found in query")
 
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
-    if network == protocols.blockchain.NETWORK_BITCOIN:
-        if query_type == MODEL_TYPE_FUNDS_FLOW:
-            graph_search = get_graph_search(settings, network)
-            output = graph_search.execute_benchmark_query(query)
-            graph_search.close()
-            return {
-                "network": network,
-                "output": output[0],
-            }
-        elif query_type == MODEL_TYPE_BALANCE_TRACKING:
-            balance_search_factory = get_balance_search_factory()
-            balance_search = balance_search_factory.create_balance_search(network)
-            output = balance_search.execute_benchmark_query(query)
-            balance_search.close()
-            return {
-                "network": network,
-                "output": output,
-            }
-        else:
-            raise HTTPException(status_code=400, detail="Invalid query type")
 
-    else:
+    graph_search = get_graph_search(settings, network)
+    output = graph_search.execute_benchmark_query(query)
+    graph_search.close()
+    return {
+        "network": network,
+        "output": output[0],
+    }
+
+@v1_router.get("/benchmark/balance_tracking/{network}", summary="Benchmark query", description="Benchmark the query",
+               tags=["v1"])
+async def benchmark_balance_tracking_v1(network: str, query: str = Query(..., description="Query to benchmark")):
+    if not is_query_only(benchmark_balance_tracking_restricted_keywords, query):
+        raise HTTPException(status_code=400, detail="Invalid query, restricted keywords found in query")
+
+    if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
+
+    balance_search_factory = get_balance_search_factory()
+    balance_search = balance_search_factory.create_balance_search(network)
+    output = balance_search.execute_benchmark_query(query)
+    balance_search.close()
+    return {
+        "network": network,
+        "output": output,
+    }
 
 
 @v1_router.post("/process_prompt", summary="Executes user prompt",
@@ -381,6 +379,13 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
                         interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     return output
+
+def is_query_only(query_restricted_keywords, cypher_query):
+    normalized_query = cypher_query.upper()
+    for keyword in query_restricted_keywords:
+        if keyword in normalized_query:
+            return False
+    return True
 
 
 app.include_router(v1_router, prefix="/v1")

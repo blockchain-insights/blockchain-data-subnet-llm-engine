@@ -54,6 +54,7 @@ class BitcoinBalanceSearch(BaseBalanceSearch):
                 latest_balance_change = session.query(BalanceChange).order_by(BalanceChange.block.desc()).first()
                 latest_block = latest_balance_change.block
             except SQLAlchemyError as e:
+                logger.error(f"An error occurred: {str(e)}")
                 latest_block = 0
             return latest_block
 
