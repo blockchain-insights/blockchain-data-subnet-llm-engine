@@ -133,7 +133,7 @@ async def discovery_v1(network: str,
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
-@v1_router.get("/challenge/{network}",
+@v1_router.get("/challenge/funds_flow/{network}",
                summary="Solve challenge",
                description="Solve the challenge", tags=["v1"])
 async def challenge_v1(network: str,
@@ -171,7 +171,7 @@ async def challenge_v1(network: str,
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
-@v1_router.get("/balance_tracking/",
+@v1_router.get("/challenge/balance_tracking/{network}",
                summary="Solve balance tracking challenge",
                description="Solve the balance tracking challenge", tags=["v1"])
 async def balance_challenge_v1(network: str,
