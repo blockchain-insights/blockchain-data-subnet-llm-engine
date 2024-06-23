@@ -129,7 +129,8 @@ async def discovery_v1(network: str,
             "network": network,
             "funds_flow_model_start_block": funds_flow_model_start_block,
             "funds_flow_model_ast_block": funds_flow_model_last_block,
-            "balance_model_last_block": balance_model_last_block
+            "balance_model_last_block": balance_model_last_block,
+            "llm_engine_version": __init__.__version__
         }
 
     else:
