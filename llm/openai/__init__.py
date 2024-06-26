@@ -12,7 +12,6 @@ from langchain_community.graphs import MemgraphGraph
 from llm.utils import split_messages_into_chunks
 from settings import Settings
 from shared.helpers.blob_reader import download_blob_content
-from shared.helpers.file_reader import read_local_file
 
 
 class OpenAILLM(BaseLLM):
@@ -23,21 +22,14 @@ class OpenAILLM(BaseLLM):
 
     def build_query_from_messages_balance_tracker(self, llm_messages: List[LlmMessage]):
 
-        local_file_path = "bitcoin/balance_tracking/query_prompt"
-        prompt = read_local_file(local_file_path)
+        blob_path = "bitcoin/balance_tracking/query_prompt"
+        prompt = download_blob_content(blob_path)
         if prompt:
-            logger.info(f"Read content from local file {local_file_path}:\n{prompt}")
+            logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
-            logger.error(f"Failed to read content from local file {local_file_path}")
-            # fallback: read from the blob
-            blob_path = "bitcoin/balance_tracking/query_prompt"
-            prompt = download_blob_content(blob_path)
-            if prompt:
-                logger.info(f"Content of {blob_path}:\n{prompt}")
-            else:
-                # If both methods fail, log an error and raise an exception
-                logger.error(f"Failed to read content from both local file and blob {local_file_path} and {blob_path}")
-                raise Exception("Failed to read prompt content")
+            # fallback: read from the local prompt
+            prompt = balance_tracker_query_schema
+            logger.error(f"Failed to read content of {blob_path}")
 
         messages = [
             SystemMessage(
@@ -70,21 +62,14 @@ class OpenAILLM(BaseLLM):
 
     def build_cypher_query_from_messages(self, llm_messages: List[LlmMessage]) -> str:
 
-        local_file_path = "bitcoin/funds_flow/query_prompt"
-        prompt = read_local_file(local_file_path)
+        blob_path = "bitcoin/funds_flow/query_prompt"
+        prompt = download_blob_content(blob_path)
         if prompt:
-            logger.info(f"Read content from local file {local_file_path}:\n{prompt}")
+            logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
-            logger.error(f"Failed to read content from local file {local_file_path}")
-            # fallback: read from the blob
-            blob_path = "bitcoin/funds_flow/query_prompt"
-            prompt = download_blob_content(blob_path)
-            if prompt:
-                logger.info(f"Content of {blob_path}:\n{prompt}")
-            else:
-                # If both methods fail, log an error and raise an exception
-                logger.error(f"Failed to read content from both local file and blob {local_file_path} and {blob_path}")
-                raise Exception("Failed to read prompt content")
+            # fallback: read from the local prompt
+            prompt = query_cypher_schema
+            logger.error(f"Failed to read content of {blob_path}")
 
         messages = [
             SystemMessage(
@@ -106,21 +91,14 @@ class OpenAILLM(BaseLLM):
 
     def determine_model_type(self, llm_messages: List[LlmMessage]) -> str:
 
-        local_file_path = "classification/classification_prompt"
-        prompt = read_local_file(local_file_path)
+        blob_path = "classification/classification_prompt"
+        prompt = download_blob_content(blob_path)
         if prompt:
-            logger.info(f"Read content from local file {local_file_path}:\n{prompt}")
+            logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
-            logger.error(f"Failed to read content from local file {local_file_path}")
-            # fallback: read from the blob
-            blob_path = "classification/classification_prompt"
-            prompt = download_blob_content(blob_path)
-            if prompt:
-                logger.info(f"Content of {blob_path}:\n{prompt}")
-            else:
-                # If both methods fail, log an error and raise an exception
-                logger.error(f"Failed to read content from both local file and blob {local_file_path} and {blob_path}")
-                raise Exception("Failed to read prompt content")
+            # fallback: read from the local prompt
+            prompt = classification_prompt
+            logger.error(f"Failed to read content of {blob_path}")
 
         messages = [
             SystemMessage(
@@ -154,21 +132,14 @@ class OpenAILLM(BaseLLM):
 
     def interpret_result(self, llm_messages: str, result: list) -> str:
 
-        local_file_path = "bitcoin/funds_flow/interpretation_prompt"
-        prompt = read_local_file(local_file_path)
+        blob_path = "bitcoin/funds_flow/interpretation_prompt"
+        prompt = download_blob_content(blob_path)
         if prompt:
-            logger.info(f"Read content from local file {local_file_path}:\n{prompt}")
+            logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
-            logger.error(f"Failed to read content from local file {local_file_path}")
-            # fallback: read from the blob
-            blob_path = "bitcoin/funds_flow/interpretation_prompt"
-            prompt = download_blob_content(blob_path)
-            if prompt:
-                logger.info(f"Content of {blob_path}:\n{prompt}")
-            else:
-                # If both methods fail, log an error and raise an exception
-                logger.error(f"Failed to read content from both local file and blob {local_file_path} and {blob_path}")
-                raise Exception("Failed to read prompt content")
+            # fallback: read from the local prompt
+            prompt = interpret_prompt
+            logger.error(f"Failed to read content of {blob_path}")
 
         messages = [
             SystemMessage(
@@ -199,21 +170,14 @@ class OpenAILLM(BaseLLM):
 
     def interpret_result_balance_tracker(self, llm_messages: List[LlmMessage], result: list) -> str:
 
-        local_file_path = "bitcoin/balance_tracking/interpretation_prompt"
-        prompt = read_local_file(local_file_path)
+        blob_path = "bitcoin/balance_tracking/interpretation_prompt"
+        prompt = download_blob_content(blob_path)
         if prompt:
-            logger.info(f"Read content from local file {local_file_path}:\n{prompt}")
+            logger.info(f"Content of {blob_path}:\n{prompt}")
         else:
-            logger.error(f"Failed to read content from local file {local_file_path}")
-            # fallback: read from the blob
-            blob_path = "bitcoin/balance_tracking/interpretation_prompt"
-            prompt = download_blob_content(blob_path)
-            if prompt:
-                logger.info(f"Content of {blob_path}:\n{prompt}")
-            else:
-                # If both methods fail, log an error and raise an exception
-                logger.error(f"Failed to read content from both local file and blob {local_file_path} and {blob_path}")
-                raise Exception("Failed to read prompt content")
+            #fallback: read from the local prompt
+            prompt = balance_tracker_interpret_prompt
+            logger.error(f"Failed to read content of {blob_path}")
 
         messages = [
             SystemMessage(
