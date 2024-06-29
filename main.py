@@ -244,15 +244,17 @@ async def llm_query_v1(
         llm_factory: LLMFactory = Depends(get_llm_factory),
         graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory),
         balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
-    logger.info(f"llm query received: {request.llm_type}, network: {request.network}")
+    logger.info(f"llm query received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
     output = None
     start_time = time.time()
 
-    llm = llm_factory.create_llm(request.llm_type)
-
     try:
+        llm = llm_factory.create_llm(request.llm_type)
+        logger.info(f"Created LLM: {llm}")
+
         # Determine the model type
-        model_type = llm.determine_model_type(request.messages)
+        model_type = llm.determine_model_type(request.messages, request.llm_type, request.network)
+        logger.info(f"Determined model type: {model_type}")
 
         if model_type == 'funds_flow':
             output = await handle_funds_flow_query(request, llm, graph_search_factory)
@@ -263,7 +265,7 @@ async def llm_query_v1(
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
+        error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         output = [
             QueryOutput(type="error", error=error_code,
                         interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
@@ -280,11 +282,11 @@ async def llm_query_switch_v1(
             {"type": 0,
              "content": "Return me top 3 addresses that have the highest current balances plus return blocks and timestamps."}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory)):
+    logger.info(f"Received request: {request}")
     llm = llm_factory.create_llm(request.llm_type)
-    model_type = llm.determine_model_type(request.messages)
-
+    model_type = llm.determine_model_type(request.messages, request.llm_type, request.network)
+    logger.info(f"Determined model type: {model_type}")
     return SwitchResponse(model=model_type)
-
 
 @v1_router.post("/process_prompt_funds_flow", summary="Executes user prompt",
                 description="Execute user prompt and return the result", tags=["v1"],
@@ -295,7 +297,26 @@ async def llm_query_funds_flow_v1(
              "content": "Return 3 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
         graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
-    return await handle_funds_flow_query(request, llm_factory.create_llm(request.llm_type), graph_search_factory)
+    logger.info(f"llm query funds flow received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
+    output = None
+    start_time = time.time()
+
+    try:
+        llm = llm_factory.create_llm(request.llm_type)
+        logger.info(f"Created LLM: {llm}")
+
+        output = await handle_funds_flow_query(request, llm, graph_search_factory)
+
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
+        output = [
+            QueryOutput(type="error", error=error_code,
+                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+
+    logger.info(f"Serving llm query funds flow output: {output} (Total time taken: {time.time() - start_time} seconds)")
+
+    return output
 
 
 @v1_router.post("/process_prompt_balance_tracking", summary="Executes user prompt for balance tracking",
@@ -306,8 +327,26 @@ async def llm_query_balance_tracking_v1(
             {"type": 0, "content": "Return me address who had highest amount of BTC in 2009-01"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
         balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
-    return await handle_balance_tracking_query(request, llm_factory.create_llm(request.llm_type),
-                                               balance_search_factory)
+    logger.info(f"llm query balance tracking received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
+    output = None
+    start_time = time.time()
+
+    try:
+        llm = llm_factory.create_llm(request.llm_type)
+        logger.info(f"Created LLM: {llm}")
+
+        output = await handle_balance_tracking_query(request, llm, balance_search_factory)
+
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
+        output = [
+            QueryOutput(type="error", error=error_code,
+                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+
+    logger.info(f"Serving llm query balance tracking output: {output} (Total time taken: {time.time() - start_time} seconds)")
+
+    return output
 
 
 async def handle_funds_flow_query(request, llm, graph_search_factory):
@@ -315,7 +354,7 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
         graph_search = graph_search_factory.create_graph_search(request.network)
         query_start_time = time.time()
 
-        query = llm.build_cypher_query_from_messages(request.messages).strip('`')
+        query = llm.build_cypher_query_from_messages(request.messages, request.llm_type, request.network).strip('`')
         logger.info(f"generated cypher query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
         if query == 'error':
@@ -330,7 +369,7 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
         graph_transformed_result = transform_result(result)
 
         interpret_result_start_time = time.time()
-        interpreted_result = llm.interpret_result(llm_messages=request.messages, result=graph_transformed_result)
+        interpreted_result = llm.interpret_result_funds_flow(llm_messages=request.messages, result=graph_transformed_result, llm_type=request.llm_type, network=request.network)
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
@@ -341,7 +380,7 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
+        error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         output = [
             QueryOutput(type="error", error=error_code,
                         interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
@@ -352,7 +391,7 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
 async def handle_balance_tracking_query(request, llm, balance_search_factory):
     try:
         query_start_time = time.time()
-        query = llm.build_query_from_messages_balance_tracker(request.messages)
+        query = llm.build_query_from_messages_balance_tracker(request.messages, request.llm_type, request.network)
         logger.info(f"extracted query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
         execute_query_start_time = time.time()
@@ -363,7 +402,9 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
 
         interpret_result_start_time = time.time()
         interpreted_result = llm.interpret_result_balance_tracker(llm_messages=request.messages,
-                                                                  result=tabular_transformed_result)
+                                                                  result=tabular_transformed_result,
+                                                                  llm_type=request.llm_type,
+                                                                  network=request.network)
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
@@ -374,7 +415,7 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
 
     except Exception as e:
         logger.error(traceback.format_exc())
-        error_code = e.args[0] if len(e.args) > 0 else LLM_UNKNOWN_ERROR
+        error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         output = [
             QueryOutput(type="error", error=error_code,
                         interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
