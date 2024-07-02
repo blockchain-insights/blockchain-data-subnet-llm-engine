@@ -8,7 +8,6 @@ load_dotenv(override=True)
 
 
 class Settings(BaseSettings):
-    LLM_TYPE: str
     OPEN_AI_KEY: Optional[str]
     CORCEL_API_KEY: Optional[str]
     GRAPH_DB_URL: str
