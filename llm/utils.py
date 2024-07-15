@@ -3,7 +3,6 @@ from transformers import GPT2Tokenizer
 
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
-
 def split_messages_into_chunks(messages, max_tokens: int = 1024):
     chunks = []
     current_chunk = []
@@ -37,3 +36,10 @@ def split_messages_into_chunks(messages, max_tokens: int = 1024):
         chunks.append(current_chunk)
 
     return chunks
+
+def get_message_token_count(message):
+    tokens = tokenizer.encode(message)
+    
+    print(f'gpt2 tokens {len(tokens)}')
+    
+    return len(tokens)

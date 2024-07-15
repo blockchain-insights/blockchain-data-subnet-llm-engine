@@ -4,7 +4,7 @@ from loguru import logger
 from datetime import datetime
 import string
 import time
-
+from llm.utils import get_message_token_count
 
 class CorcelClient:
     def __init__(self, api_key: str, base_url: str = "https://api.corcel.io/v1/text/cortext/chat"):
@@ -35,6 +35,7 @@ class CorcelClient:
         # If question is provided, append it to the prompt
         if question:
             full_prompt = f"{full_prompt}\n\nActual question is: {question}"
+        prompt_token_count = get_message_token_count(full_prompt)
 
         payload = {
             "model": model,
@@ -89,14 +90,15 @@ class CorcelClient:
             duration = end_time - start_time
 
             # Extract the number of tokens from the response
-            tokens = sum(len(choice.get('message', {}).get('content', '').split()) for choice in choices_data)
+            tokens = sum(len(choice.get('delta', {}).get('content', '').split()) for choice in choices_data)
 
             # Calculate tokens per second
             tokens_per_second = tokens / duration if duration > 0 else 0
 
             logger.info(f"Tokens per second: {tokens_per_second}")
+            completion_token_count = get_message_token_count(choices_data[0]['delta']['content'])
 
-            return choices_data[0]['delta']['content']
+            return choices_data[0]['delta']['content'], {'completion_tokens': completion_token_count, 'prompt_tokens': prompt_token_count, 'total_tokens': prompt_token_count + completion_token_count}
         except (KeyError, TypeError, IndexError) as e:
             logger.error(f"Unexpected response structure: {response_data}")
             raise Exception("Invalid response structure") from e
