@@ -20,19 +20,22 @@ class BaseBalanceSearch:
     def get_latest_block_number(self):
         """Get the latest block number."""
 
+    def close(self):
+        """Close the connection to the database."""
+
 
 class BalanceSearchFactory:
     @classmethod
     def create_balance_search(cls, network: str) -> BaseBalanceSearch:
-        graph_search_class = {
+        balance_search_class = {
             NETWORK_BITCOIN: BitcoinBalanceSearch,
             # Add other networks and their corresponding classes as needed
         }.get(network)
 
-        if graph_search_class is None:
+        if balance_search_class is None:
             raise ValueError(f"Unsupported network Type: {network}")
 
-        return graph_search_class(settings.DB_CONNECTION_STRING)
+        return balance_search_class(settings.DB_CONNECTION_STRING)
 
 
 class BitcoinBalanceSearch(BaseBalanceSearch):

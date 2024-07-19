@@ -54,8 +54,6 @@ class OpenAILLM(BaseLLM):
             # Log the entire response content
             logger.debug(f"AI message content: {ai_message.content}")
 
-            token_usage = ai_message.response_metadata['token_usage']
-
             # Handle both cases: with and without triple backticks
             if ai_message.content.startswith("```") and ai_message.content.endswith("```"):
                 # Extract the SQL code from the response
@@ -64,12 +62,12 @@ class OpenAILLM(BaseLLM):
                 # Directly use the content as the query
                 query = ai_message.content.strip()
 
-            return query, token_usage
+            return query
         except Exception as e:
             logger.error(f"LlmQuery build error: {e}")
             raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
 
-    def build_cypher_query_from_messages(self, llm_messages: List[LlmMessage], llm_type: str, network: str):
+    def build_cypher_query_from_messages(self, llm_messages: List[LlmMessage], llm_type: str, network: str) -> str:
 
         local_file_path = f"{llm_type}/{network}/funds_flow/query_prompt.txt"
         prompt = read_local_file(local_file_path)
@@ -100,13 +98,12 @@ class OpenAILLM(BaseLLM):
         try:
             ai_message = self.chat_gpt4o.invoke(messages)
             logger.info(f"AI-generated message: {ai_message.content}")
-            token_usage = ai_message.response_metadata['token_usage']
-            return ai_message.content, token_usage
+            return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery build error: {e}")
             raise Exception(LLM_ERROR_QUERY_BUILD_FAILED)
 
-    def determine_model_type(self, llm_messages: List[LlmMessage], llm_type: str, network: str):
+    def determine_model_type(self, llm_messages: List[LlmMessage], llm_type: str, network: str) -> str:
 
         local_file_path = f"{llm_type}/{network}/classification/classification_prompt.txt"
         prompt = read_local_file(local_file_path)
@@ -142,16 +139,12 @@ class OpenAILLM(BaseLLM):
 
             # Log the entire response content
             logger.debug(f"AI message content: {ai_message.content}")
-            
-            # Count tokens for the output message
-            token_usage = ai_message.response_metadata['token_usage']
-            logger.info(f"Number of tokens: {token_usage}")
-            
+
             # Extract the classification from the response
             if "Funds Flow" in ai_message.content:
-                return "funds_flow", token_usage
+                return "funds_flow"
             elif "Balance Tracking" in ai_message.content:
-                return "balance_tracking", token_usage
+                return "balance_tracking"
             else:
                 logger.error("Received invalid classification from AI response")
                 raise Exception("LLM_ERROR_CLASSIFICATION_FAILED")
@@ -159,7 +152,7 @@ class OpenAILLM(BaseLLM):
             logger.error(f"LlmQuery classification error: {e}")
             raise Exception("LLM_ERROR_CLASSIFICATION_FAILED")
 
-    def interpret_result_funds_flow(self, llm_messages: list, result: list, llm_type: str, network: str):
+    def interpret_result_funds_flow(self, llm_messages: list, result: list, llm_type: str, network: str) -> str:
         local_file_path = f"{llm_type}/{network}/funds_flow/interpretation_prompt.txt"
         prompt = read_local_file(local_file_path)
         if prompt:
@@ -204,25 +197,20 @@ class OpenAILLM(BaseLLM):
         try:
             message_chunks = split_messages_into_chunks(messages)
             ai_responses = []
-            total_token_usage = {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
             for chunk in message_chunks:
                 ai_message = self.chat_gpt4o.invoke(chunk)
-                token_usage = ai_message.response_metadata['token_usage']
-                total_token_usage['completion_tokens'] += token_usage['completion_tokens']
-                total_token_usage['prompt_tokens'] += token_usage['prompt_tokens']
-                total_token_usage['total_tokens'] += token_usage['total_tokens']
                 ai_responses.append(ai_message.content)
 
             # Combine the responses
             combined_response = "\n".join(ai_responses)
-            return combined_response, total_token_usage
+            return combined_response
 
         except Exception as e:
             logger.error(f"LlmQuery interpret result error: {e}")
             raise Exception(LLM_ERROR_INTERPRETION_FAILED)
 
-    def interpret_result_balance_tracker(self, llm_messages: List[LlmMessage], result: list, llm_type: str, network: str):
+    def interpret_result_balance_tracker(self, llm_messages: List[LlmMessage], result: list, llm_type: str, network: str) -> str:
 
         local_file_path = f"{llm_type}/{network}/balance_tracking/interpretation_prompt.txt"
         prompt = read_local_file(local_file_path)
@@ -254,12 +242,11 @@ class OpenAILLM(BaseLLM):
         try:
             ai_message = self.chat_gpt4o.invoke(messages)
             logger.info(f'ai_message using GPT-4  : {ai_message}')
-            token_usage = ai_message.response_metadata['token_usage']
-            return ai_message.content, token_usage
+            return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery interpret result error: {e}")
             raise Exception(LLM_ERROR_INTERPRETION_FAILED)
-    def generate_general_response(self, llm_messages: List[LlmMessage]):
+    def generate_general_response(self, llm_messages: List[LlmMessage]) -> str:
         messages = [
             SystemMessage(
                 content=general_prompt
@@ -274,14 +261,13 @@ class OpenAILLM(BaseLLM):
         try:
             ai_message = self.chat_gpt4o.invoke(messages)
             logger.info(f'ai_message using GPT-4  : {ai_message}')
-            token_usage = ai_message.response_metadata['token_usage']
             if ai_message == "not applicable questions":
                 raise Exception(LLM_ERROR_NOT_APPLICAPLE_QUESTIONS)
             else:
-                return ai_message.content, token_usage
+                return ai_message.content
         except Exception as e:
             logger.error(f"LlmQuery general response error: {e}")
             raise Exception(LLM_ERROR_GENERAL_RESPONSE_FAILED)
 
-    def generate_llm_query_from_query(self, query: Query):
+    def generate_llm_query_from_query(self, query: Query) -> str:
         pass
