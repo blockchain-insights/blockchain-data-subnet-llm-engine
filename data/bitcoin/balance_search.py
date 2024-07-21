@@ -2,7 +2,7 @@ import os
 
 from loguru import logger
 from protocols.blockchain import NETWORK_BITCOIN
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
@@ -85,15 +85,9 @@ class BitcoinBalanceSearch(BaseBalanceSearch):
     def execute_bitcoin_balance_challenge(self, block_height: int):
         try:
             with self.Session() as session:
-                logger.info(f"Executing balance tracking challenge query for block height: {block_height}")
-                query_results = session.query(BalanceChange).filter(BalanceChange.block == block_height).all()
-
-            changes = {}
-
-            for record in query_results:
-                changes[record.address] = record.d_balance
-
-            return changes
+                logger.info(f"Executing balance sum query for block height: {block_height}")
+                sum_d_balance = session.query(func.sum(BalanceChange.d_balance)).filter(BalanceChange.block == block_height).scalar()
+            return sum_d_balance
 
         except SQLAlchemyError as e:
             logger.error(f"An error occurred: {str(e)}")
