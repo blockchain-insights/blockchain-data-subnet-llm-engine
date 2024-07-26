@@ -2,20 +2,21 @@ import asyncio
 import json
 import time
 import traceback
-from typing import List
+from typing import List, Tuple
 from pathlib import Path as FilePath
 
 import protocols.blockchain
 from loguru import logger
 from fastapi import FastAPI, Request, Depends, Query, Body, APIRouter, HTTPException
 from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES, \
-    LLM_UNKNOWN_ERROR, MODEL_TYPE_BALANCE_TRACKING, MODEL_TYPE_FUNDS_FLOW
+    LLM_UNKNOWN_ERROR, LLM_ERROR_INVALID_SEARCH_PROMPT, LLM_ERROR_MODIFICATION_NOT_ALLOWED,  MODEL_TYPE_BALANCE_TRACKING, MODEL_TYPE_FUNDS_FLOW
 from pydantic import BaseModel, Field
 
 import __init__
 from data.bitcoin.balance_search import BalanceSearchFactory, BitcoinBalanceSearch
 from data.bitcoin.graph_result_transformer import transform_result
 from data.bitcoin.tabular_result_transformer import transform_result_set
+from data.bitcoin.chart_result_transformer import is_chart_applicable, convert_funds_flow_to_chart, convert_balance_tracking_to_chart
 from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
 from data.bitcoin.query_builder import QueryBuilder
 from llm.factory import LLMFactory
@@ -238,7 +239,7 @@ async def benchmark_balance_tracking_v1(network: str, query: str = Query(..., de
 
 @v1_router.post("/process_prompt", summary="Executes user prompt",
                 description="Execute user prompt and return the result", tags=["v1"],
-                response_model=Union[List[QueryOutput], Dict])
+                response_model=Union[List[QueryOutput], Dict, Tuple])
 async def llm_query_v1(
         request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [
             {"type": 0,
@@ -248,6 +249,7 @@ async def llm_query_v1(
         balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
     logger.info(f"llm query received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
     output = None
+    token_usage = None
     start_time = time.time()
 
     try:
@@ -255,15 +257,20 @@ async def llm_query_v1(
         logger.info(f"Created LLM: {llm}")
 
         # Determine the model type
-        model_type = llm.determine_model_type(request.messages, request.llm_type, request.network)
+        model_type, token_usage_classification  = llm.determine_model_type(request.messages, request.llm_type, request.network)
         logger.info(f"Determined model type: {model_type}")
 
         if model_type == 'funds_flow':
-            output = await handle_funds_flow_query(request, llm, graph_search_factory)
+            output, token_usage_query_interpret = await handle_funds_flow_query(request, llm, graph_search_factory)
         elif model_type == 'balance_tracking':
-            output = await handle_balance_tracking_query(request, llm, balance_search_factory)
+            output, token_usage_query_interpret = await handle_balance_tracking_query(request, llm, balance_search_factory)
         else:
             output = {'error': 'Unsupported model type'}
+        token_usage = {
+            'completion_tokens': token_usage_classification['completion_tokens'] + token_usage_query_interpret['completion_tokens'], 
+            'prompt_tokens': token_usage_classification['prompt_tokens'] + token_usage_query_interpret['prompt_tokens'], 
+            'total_tokens': token_usage_classification['total_tokens'] + token_usage_query_interpret['total_tokens']
+        }
 
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -274,7 +281,7 @@ async def llm_query_v1(
 
     logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
-    return output
+    return output, token_usage
 
 
 @v1_router.post("/process_prompt_switch", summary="Determine proper model to be prompted", description="", tags=["v1"],
@@ -286,7 +293,7 @@ async def llm_query_switch_v1(
         llm_factory: LLMFactory = Depends(get_llm_factory)):
     logger.info(f"Received request: {request}")
     llm = llm_factory.create_llm(request.llm_type)
-    model_type = llm.determine_model_type(request.messages, request.llm_type, request.network)
+    model_type, token_usage = llm.determine_model_type(request.messages, request.llm_type, request.network)
     logger.info(f"Determined model type: {model_type}")
     return SwitchResponse(model=model_type)
 
@@ -307,7 +314,7 @@ async def llm_query_funds_flow_v1(
         llm = llm_factory.create_llm(request.llm_type)
         logger.info(f"Created LLM: {llm}")
 
-        output = await handle_funds_flow_query(request, llm, graph_search_factory)
+        output, token_usage = await handle_funds_flow_query(request, llm, graph_search_factory)
 
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -337,7 +344,7 @@ async def llm_query_balance_tracking_v1(
         llm = llm_factory.create_llm(request.llm_type)
         logger.info(f"Created LLM: {llm}")
 
-        output = await handle_balance_tracking_query(request, llm, balance_search_factory)
+        output, token_usage = await handle_balance_tracking_query(request, llm, balance_search_factory)
 
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -356,12 +363,21 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
         graph_search = graph_search_factory.create_graph_search(request.network)
         query_start_time = time.time()
 
-        query = llm.build_cypher_query_from_messages(request.messages, request.llm_type, request.network).strip('`')
-        logger.info(f"generated cypher query: {query} (Time taken: {time.time() - query_start_time} seconds)")
+        query, token_usage_query = llm.build_cypher_query_from_messages(request.messages, request.llm_type, request.network)
+        query = query.strip('`')
+        logger.info(f"Generated Cypher query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
-        if query == 'error':
-            logger.error("Modification is not allowed")
-            return {'error': 'Modification is not allowed'}
+        if query == 'modification_error':
+            error_code = LLM_ERROR_MODIFICATION_NOT_ALLOWED
+            error_message = LLM_ERROR_MESSAGES[error_code]
+            logger.error(f"Error {error_code}: {error_message}")
+            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
+
+        if query == 'invalid_prompt_error':
+            error_code = LLM_ERROR_INVALID_SEARCH_PROMPT
+            error_message = LLM_ERROR_MESSAGES[error_code]
+            logger.error(f"Error {error_code}: {error_message}")
+            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         execute_query_start_time = time.time()
         result = graph_search.execute_query(query)
@@ -370,31 +386,50 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
         graph_search.close()
         graph_transformed_result = transform_result(result)
 
+        chart_transformed_result = None
+        if is_chart_applicable(result):
+            chart_transformed_result= convert_funds_flow_to_chart(result)
+
         interpret_result_start_time = time.time()
-        interpreted_result = llm.interpret_result_funds_flow(llm_messages=request.messages, result=graph_transformed_result, llm_type=request.llm_type, network=request.network)
+        interpreted_result, token_usage_interpret = llm.interpret_result_funds_flow(llm_messages=request.messages, result=graph_transformed_result, llm_type=request.llm_type, network=request.network)
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
             QueryOutput(type="graph", result=graph_transformed_result, interpreted_result=interpreted_result),
             QueryOutput(type="text", interpreted_result="interpreted_result"),
-            QueryOutput(type="table", interpreted_result="interpreted_result")
+            QueryOutput(type="table", interpreted_result="interpreted_result"),
+            QueryOutput(type="chart", result=chart_transformed_result, interpreted_result="interpreted_result")
         ]
 
+        token_usage = {
+            'completion_tokens': token_usage_query.get('completion_tokens', 0) + token_usage_interpret.get('completion_tokens', 0),
+            'prompt_tokens': token_usage_query.get('prompt_tokens', 0) + token_usage_interpret.get('prompt_tokens', 0),
+            'total_tokens': token_usage_query.get('total_tokens', 0) + token_usage_interpret.get('total_tokens', 0)
+        }
     except Exception as e:
         logger.error(traceback.format_exc())
         error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
+        error_message = LLM_ERROR_MESSAGES.get(error_code, 'An unknown error occurred')
         output = [
-            QueryOutput(type="error", error=error_code,
-                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(type="error", error=error_code, interpreted_result=error_message)
+        ]
+        token_usage = {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
-    return output
+    return output, token_usage
+
 
 
 async def handle_balance_tracking_query(request, llm, balance_search_factory):
     try:
         query_start_time = time.time()
-        query = llm.build_query_from_messages_balance_tracker(request.messages, request.llm_type, request.network)
+        query, token_usage_query = llm.build_query_from_messages_balance_tracker(request.messages, request.llm_type, request.network)
         logger.info(f"extracted query: {query} (Time taken: {time.time() - query_start_time} seconds)")
+
+        if query in ['modification_error', 'invalid_prompt_error']:
+            error_code = LLM_ERROR_MODIFICATION_NOT_ALLOWED if query == 'modification_error' else LLM_ERROR_INVALID_SEARCH_PROMPT
+            error_message = LLM_ERROR_MESSAGES.get(error_code)
+            logger.error(f"Error {error_code}: {error_message}")
+            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         execute_query_start_time = time.time()
         balance_search = balance_search_factory.create_balance_search(request.network)
@@ -405,27 +440,42 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
 
         tabular_transformed_result = transform_result_set(result)
 
+        chart_transformed_result = None
+        if is_chart_applicable(result):
+            chart_transformed_result = convert_balance_tracking_to_chart(result)
+
         interpret_result_start_time = time.time()
-        interpreted_result = llm.interpret_result_balance_tracker(llm_messages=request.messages,
-                                                                  result=tabular_transformed_result,
-                                                                  llm_type=request.llm_type,
-                                                                  network=request.network)
+        interpreted_result, token_usage_interpret = llm.interpret_result_balance_tracker(
+            llm_messages=request.messages,
+            result=tabular_transformed_result,
+            llm_type=request.llm_type,
+            network=request.network
+        )
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
             QueryOutput(type="graph", interpreted_result="interpreted_result"),
             QueryOutput(type="text", interpreted_result="interpreted_result"),
             QueryOutput(type="table", result=tabular_transformed_result, interpreted_result=interpreted_result),
+            QueryOutput(type="chart", result=chart_transformed_result, interpreted_result=interpreted_result)
         ]
 
+        token_usage = {
+            'completion_tokens': token_usage_query.get('completion_tokens', 0) + token_usage_interpret.get('completion_tokens', 0),
+            'prompt_tokens': token_usage_query.get('prompt_tokens', 0) + token_usage_interpret.get('prompt_tokens', 0),
+            'total_tokens': token_usage_query.get('total_tokens', 0) + token_usage_interpret.get('total_tokens', 0)
+        }
     except Exception as e:
         logger.error(traceback.format_exc())
         error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
+        error_message = LLM_ERROR_MESSAGES.get(error_code, 'An error occurred')
         output = [
-            QueryOutput(type="error", error=error_code,
-                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+            QueryOutput(type="error", error=error_code, interpreted_result=error_message)
+        ]
+        token_usage = {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
-    return output
+    return output, token_usage
+
 
 def is_query_only(query_restricted_keywords, cypher_query):
     normalized_query = cypher_query.upper()

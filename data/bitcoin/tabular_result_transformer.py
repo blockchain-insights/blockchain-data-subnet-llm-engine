@@ -1,4 +1,5 @@
 def transform_result_set(result):
+    print(result)  # Add this line to inspect the result structure
     if not result:
         return [{"columns": [], "rows": []}]
 
