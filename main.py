@@ -13,14 +13,9 @@ from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUP
 from pydantic import BaseModel, Field
 
 import __init__
-from data.bitcoin.balance_search import BalanceSearchFactory, BitcoinBalanceSearch
-from data.bitcoin.graph_result_transformer import transform_result
-from data.bitcoin.tabular_result_transformer import transform_result_set
-from data.bitcoin.chart_result_transformer import is_chart_applicable, convert_funds_flow_to_chart, convert_balance_tracking_to_chart
-from data.bitcoin.graph_search import GraphSearchFactory, get_graph_search
-from data.bitcoin.query_builder import QueryBuilder
+from data import bitcoin, ethereum
+from data import GraphSearchFactory, BalanceSearchFactory
 from llm.factory import LLMFactory
-from settings import settings
 
 from sqlalchemy import Column, Integer, BigInteger, String, TIMESTAMP, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
@@ -116,11 +111,15 @@ async def get_schema(network: str):
 @v1_router.get("/discovery/{network}", summary="Get network discovery", description="Get the network discovery details",
                tags=["v1"])
 async def discovery_v1(network: str,
-                       balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
+                       balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory),
+                       graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
-        graph_search = get_graph_search(settings, network)
+
+        graph_search = graph_search_factory.create_graph_search(network)
+
+        balance_search = balance_search_factory.create_balance_search(network)
         funds_flow_model_start_block, funds_flow_model_last_block = graph_search.get_min_max_block_height_cache()
         graph_search.close()
 
@@ -135,6 +134,17 @@ async def discovery_v1(network: str,
             "balance_model_last_block": balance_model_last_block,
             "llm_engine_version": __init__.__version__
         }
+    elif network == protocols.blockchain.NETWORK_ETHEREUM:
+        graph_search = graph_search_factory.create_graph_search(network)
+        funds_flow_model_start_block, funds_flow_model_last_block = graph_search.get_min_max_block_height()
+        graph_search.close()
+        return {
+            "network": network,
+            "funds_flow_model_start_block": funds_flow_model_start_block,
+            "funds_flow_model_last_block": funds_flow_model_last_block,
+            "balance_model_last_block": 0,
+            "llm_engine_version": __init__.__version__
+        }
 
     else:
         raise HTTPException(status_code=400, detail="Invalid network")
@@ -147,7 +157,8 @@ async def challenge_funds_flow_v1(network: str,
                        in_total_amount: int = Query(None, description="Input total amount"),
                        out_total_amount: int = Query(None, description="Output total amount"),
                        tx_id_last_6_chars: str = Query(None, description="Transaction ID last 6 characters"),
-                       checksum: str = Query(None, description="Checksum query parameter")):
+                       checksum: str = Query(None, description="Checksum query parameter"),
+                       graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
 
@@ -155,7 +166,7 @@ async def challenge_funds_flow_v1(network: str,
         if in_total_amount is None or out_total_amount is None or tx_id_last_6_chars is None:
             raise HTTPException(status_code=400,
                                 detail="Missing required query parameters for Bitcoin network, required: in_total_amount, out_total_amount, tx_id_last_4_chars")
-        graph_search = get_graph_search(settings, network)
+        graph_search = graph_search_factory.create_graph_search(network)
         output = graph_search.solve_challenge(
             in_total_amount=in_total_amount,
             out_total_amount=out_total_amount,
@@ -170,9 +181,15 @@ async def challenge_funds_flow_v1(network: str,
         if checksum is None:
             raise HTTPException(status_code=400,
                                 detail="Missing required query parameters for EVM network, required: checksum")
+        graph_search = graph_search_factory.create_graph_search(network)
+        output = graph_search.solve_challenge(
+            checksum = checksum
+        )
+        graph_search.close()
+        print(output)
         return {
             "network": network,
-            "output": 0,
+            "output": output,
         }
     else:
         raise HTTPException(status_code=400, detail="Invalid network")
@@ -191,7 +208,7 @@ async def challenge_balance_tracking_v1(network: str,
             raise HTTPException(status_code=400,
                                 detail="Missing required query parameters for Bitcoin network, required: block_height")
 
-        balance_tracking = BitcoinBalanceSearch()
+        balance_tracking = bitcoin.BitcoinBalanceSearch()
         output = balance_tracking.execute_bitcoin_balance_challenge(block_height)
 
         return {
@@ -203,14 +220,14 @@ async def challenge_balance_tracking_v1(network: str,
 
 
 @v1_router.get("/benchmark/funds_flow/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
-async def benchmark_funds_flow_v1(network: str, query: str = Query(..., description="Query to benchmark")):
+async def benchmark_funds_flow_v1(network: str, query: str = Query(..., description="Query to benchmark"),
+                       graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
     if not is_query_only(benchmark_funds_flow_restricted_keywords, query):
         raise HTTPException(status_code=400, detail="Invalid query, restricted keywords found in query")
 
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
-
-    graph_search = get_graph_search(settings, network)
+    graph_search = graph_search_factory.create_graph_search(network)
     output = graph_search.execute_benchmark_query(query)
     graph_search.close()
     return {
@@ -384,7 +401,7 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
 
         graph_search.close()
-        graph_transformed_result = transform_result(result)
+        graph_transformed_result = bitcoin.transform_result(result)
 
         chart_transformed_result = None
         if is_chart_applicable(result):
@@ -438,7 +455,7 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
 
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
 
-        tabular_transformed_result = transform_result_set(result)
+        tabular_transformed_result = bitcoin.transform_result_set(result)
 
         chart_transformed_result = None
         if is_chart_applicable(result):

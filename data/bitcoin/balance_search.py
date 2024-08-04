@@ -9,34 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from settings import settings
 from .balance_model import Base, BalanceChange
 
-
-class BaseBalanceSearch:
-    def execute_query(self, query: str):
-        """Execute a query and return the result."""
-
-    def execute_benchmark_query(self, query: str):
-        """Execute a query and return the result."""
-
-    def get_latest_block_number(self):
-        """Get the latest block number."""
-
-    def close(self):
-        """Close the connection to the database."""
-
-
-class BalanceSearchFactory:
-    @classmethod
-    def create_balance_search(cls, network: str) -> BaseBalanceSearch:
-        balance_search_class = {
-            NETWORK_BITCOIN: BitcoinBalanceSearch,
-            # Add other networks and their corresponding classes as needed
-        }.get(network)
-
-        if balance_search_class is None:
-            raise ValueError(f"Unsupported network Type: {network}")
-
-        return balance_search_class(settings.DB_CONNECTION_STRING)
-
+from data.utils.base_search import BaseBalanceSearch
 
 class BitcoinBalanceSearch(BaseBalanceSearch):
     def __init__(self, db_url: str = None):

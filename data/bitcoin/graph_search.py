@@ -1,36 +1,11 @@
 from neo4j import GraphDatabase
 from loguru import logger
-from protocols.blockchain import NETWORK_BITCOIN
 from protocols.llm_engine import Query
+from data.utils.base_search import BaseGraphSearch
 
 from data.bitcoin.query_builder import QueryBuilder
-from settings import Settings, settings
 
-
-class BaseGraphSearch:
-    def execute_query(self, query: str):
-        """Execute a query and return the result."""
-
-    def execute_cypher_query(self, cypher_query: str):
-        """Execute a cypher query and return the result."""
-
-    def close(self):
-        """Close the connection to the graph database."""
-
-
-class GraphSearchFactory:
-    @classmethod
-    def create_graph_search(cls, network: str) -> BaseGraphSearch:
-        graph_search_class = {
-            NETWORK_BITCOIN: BitcoinGraphSearch,
-            # Add other networks and their corresponding classes as needed
-        }.get(network)
-
-        if graph_search_class is None:
-            raise ValueError(f"Unsupported network Type: {network}")
-
-        return graph_search_class(settings)
-
+from settings import Settings
 
 class BitcoinGraphSearch(BaseGraphSearch):
     def __init__(self, settings: Settings):
@@ -110,10 +85,3 @@ class BitcoinGraphSearch(BaseGraphSearch):
         with self.driver.session() as session:
             result = session.run(cypher_query)
             return result.single()
-
-
-def get_graph_search(settings, network):
-    switch = {
-        NETWORK_BITCOIN: lambda: BitcoinGraphSearch(settings),
-    }
-    return switch[network]()
