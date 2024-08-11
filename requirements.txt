@@ -10,3 +10,4 @@ blockchain-data-subnet-shared-libs==0.0.21
 psycopg2-binary
 sqlalchemy
 transformers
+asyncpg

@@ -177,16 +177,22 @@ class OpenAILLM(BaseLLM):
                 raise Exception("Failed to read prompt content")
 
         # Convert result to JSON string
-        try:
-            result_str = json.dumps(result, indent=2)
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.error(f"Error during result formatting: {e}")
-            raise Exception("Error formatting result as JSON") from e
+        # Check if the result is empty
+        if not result:
+            logger.warning("The result is empty. Ensure the result data is correctly generated.")
+            # Optionally handle empty results differently, e.g., set a default message
+            result_str = "No data available to interpret. Result is empty."
+        else:
+            # Convert result to JSON string
+            try:
+                result_str = json.dumps(result, indent=2)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.error(f"Error during result formatting: {e}")
+                raise Exception("Error formatting result as JSON") from e
 
-        # Use string.Template to safely substitute the result into the prompt
-        template = Template(prompt)
+        # Use string.format to safely substitute the result into the prompt
         try:
-            full_prompt = template.safe_substitute(result=result_str)
+            full_prompt = prompt.format(result=result_str)
         except KeyError as e:
             logger.error(f"KeyError during prompt formatting: {e}")
             logger.error(f"Prompt: {prompt}")
@@ -200,7 +206,6 @@ class OpenAILLM(BaseLLM):
                 messages.append(HumanMessage(content=llm_message.content))
             else:
                 messages.append(AIMessage(content=llm_message.content))
-
         try:
             message_chunks = split_messages_into_chunks(messages)
             ai_responses = []

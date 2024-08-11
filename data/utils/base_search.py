@@ -16,5 +16,5 @@ class BaseBalanceSearch:
     def execute_benchmark_query(self, query: str):
         """Execute a query and return the result."""
 
-    def get_latest_block_number(self):
+    async def get_latest_block_number(self):
         """Get the latest block number."""

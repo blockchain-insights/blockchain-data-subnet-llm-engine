@@ -1,40 +1,57 @@
 import asyncio
 import json
 import time
+import contextlib
 import traceback
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Union
 from pathlib import Path as FilePath
 
 import protocols.blockchain
 from loguru import logger
 from fastapi import FastAPI, Request, Depends, Query, Body, APIRouter, HTTPException
 from protocols.llm_engine import LlmMessage, QueryOutput, LLM_ERROR_TYPE_NOT_SUPPORTED, LLM_ERROR_MESSAGES, \
-    LLM_UNKNOWN_ERROR, LLM_ERROR_INVALID_SEARCH_PROMPT, LLM_ERROR_MODIFICATION_NOT_ALLOWED,  MODEL_TYPE_BALANCE_TRACKING, MODEL_TYPE_FUNDS_FLOW
+    LLM_UNKNOWN_ERROR, LLM_ERROR_INVALID_SEARCH_PROMPT, LLM_ERROR_MODIFICATION_NOT_ALLOWED, MODEL_TYPE_BALANCE_TRACKING, \
+    MODEL_TYPE_FUNDS_FLOW
 from pydantic import BaseModel, Field
 
 import __init__
-from data import bitcoin, ethereum
-from data import GraphSearchFactory, BalanceSearchFactory
+from data import bitcoin
+from data import GraphSearchFactory, BalanceSearchFactory, GraphTransformerFactory, ChartTransformerFactory, \
+    TabularTransformerFactory
 from llm.factory import LLMFactory
+from typing import AsyncIterator
+import anyio
 
+from settings import settings
 from sqlalchemy import Column, Integer, BigInteger, String, TIMESTAMP, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from data.session_manager import db_manager, get_session
 
 import os
 
-from typing import Dict, Union
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    db_manager.init(settings.db_url_obj)
+    async with anyio.create_task_group() as tg:
+        yield
+    await db_manager.close()
 
-app = FastAPI(
+app = FastAPI(lifespan=lifespan,
     title="Blockchain Insights LLM ENGINE",
     description="API designed to execute user prompts related to blockchain queries using LLM agents. It integrates with different LLMs and graph search functionalities to process and interpret blockchain data.",
-    version=__init__.__version__, )
+    version=__init__.__version__,
+)
 
-benchmark_funds_flow_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX',
-                                 'CREATE CONSTRAINT', 'DROP CONSTRAINT']
+benchmark_funds_flow_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX',
+                                            'DROP INDEX',
+                                            'CREATE CONSTRAINT', 'DROP CONSTRAINT']
 
-benchmark_balance_tracking_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE', 'CREATE INDEX', 'DROP INDEX',
-                                 'CREATE CONSTRAINT', 'DROP CONSTRAINT']
+benchmark_balance_tracking_restricted_keywords = ['CREATE', 'SET', 'DELETE', 'DETACH', 'REMOVE', 'MERGE',
+                                                  'CREATE INDEX', 'DROP INDEX',
+                                                  'CREATE CONSTRAINT', 'DROP CONSTRAINT']
 
 
 def get_llm_factory() -> LLMFactory:
@@ -47,6 +64,18 @@ def get_graph_search_factory() -> GraphSearchFactory:
 
 def get_balance_search_factory() -> BalanceSearchFactory:
     return BalanceSearchFactory()
+
+
+def get_graph_transformer_factory() -> GraphTransformerFactory:
+    return GraphTransformerFactory()
+
+
+def get_chart_transformer_factory() -> ChartTransformerFactory:
+    return ChartTransformerFactory()
+
+
+def get_tabular_transformer_factory() -> TabularTransformerFactory:
+    return TabularTransformerFactory()
 
 
 @app.middleware("http")
@@ -81,7 +110,7 @@ class SwitchResponse(BaseModel):
 
 
 v1_router = APIRouter()
-valid_networks = [protocols.blockchain.NETWORK_BITCOIN, protocols.blockchain.NETWORK_ETHEREUM]
+valid_networks = [protocols.blockchain.NETWORK_BITCOIN]
 
 
 @v1_router.get("/networks", summary="Get supported networks", description="Get the list of supported networks",
@@ -111,38 +140,29 @@ async def get_schema(network: str):
 @v1_router.get("/discovery/{network}", summary="Get network discovery", description="Get the network discovery details",
                tags=["v1"])
 async def discovery_v1(network: str,
+                       db: AsyncSession = Depends(get_session),
                        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory),
                        graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
     if network == protocols.blockchain.NETWORK_BITCOIN:
+        
+        logger.info('Discovery request received')
 
         graph_search = graph_search_factory.create_graph_search(network)
-
-        balance_search = balance_search_factory.create_balance_search(network)
         funds_flow_model_start_block, funds_flow_model_last_block = graph_search.get_min_max_block_height_cache()
         graph_search.close()
+        
+        logger.info('Graph db request finished')
 
-        balance_search = balance_search_factory.create_balance_search(network)
-        balance_model_last_block = balance_search.get_latest_block_number()
-        balance_search.close()
+        balance_search = balance_search_factory.create_balance_search(network, db)
+        balance_model_last_block = await balance_search.get_latest_block_number()
 
         return {
             "network": network,
             "funds_flow_model_start_block": funds_flow_model_start_block,
             "funds_flow_model_ast_block": funds_flow_model_last_block,
             "balance_model_last_block": balance_model_last_block,
-            "llm_engine_version": __init__.__version__
-        }
-    elif network == protocols.blockchain.NETWORK_ETHEREUM:
-        graph_search = graph_search_factory.create_graph_search(network)
-        funds_flow_model_start_block, funds_flow_model_last_block = graph_search.get_min_max_block_height()
-        graph_search.close()
-        return {
-            "network": network,
-            "funds_flow_model_start_block": funds_flow_model_start_block,
-            "funds_flow_model_last_block": funds_flow_model_last_block,
-            "balance_model_last_block": 0,
             "llm_engine_version": __init__.__version__
         }
 
@@ -154,11 +174,11 @@ async def discovery_v1(network: str,
                summary="Solve challenge",
                description="Solve the funds flow challenge", tags=["v1"])
 async def challenge_funds_flow_v1(network: str,
-                       in_total_amount: int = Query(None, description="Input total amount"),
-                       out_total_amount: int = Query(None, description="Output total amount"),
-                       tx_id_last_6_chars: str = Query(None, description="Transaction ID last 6 characters"),
-                       checksum: str = Query(None, description="Checksum query parameter"),
-                       graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
+                                  in_total_amount: int = Query(None, description="Input total amount"),
+                                  out_total_amount: int = Query(None, description="Output total amount"),
+                                  tx_id_last_6_chars: str = Query(None, description="Transaction ID last 6 characters"),
+                                  checksum: str = Query(None, description="Checksum query parameter"),
+                                  graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
 
@@ -177,20 +197,6 @@ async def challenge_funds_flow_v1(network: str,
             "network": network,
             "output": output,
         }
-    elif network == protocols.blockchain.NETWORK_ETHEREUM:
-        if checksum is None:
-            raise HTTPException(status_code=400,
-                                detail="Missing required query parameters for EVM network, required: checksum")
-        graph_search = graph_search_factory.create_graph_search(network)
-        output = graph_search.solve_challenge(
-            checksum = checksum
-        )
-        graph_search.close()
-        print(output)
-        return {
-            "network": network,
-            "output": output,
-        }
     else:
         raise HTTPException(status_code=400, detail="Invalid network")
 
@@ -199,7 +205,9 @@ async def challenge_funds_flow_v1(network: str,
                summary="Solve balance tracking challenge",
                description="Solve the balance tracking challenge", tags=["v1"])
 async def challenge_balance_tracking_v1(network: str,
-                               block_height: int = Query(None, description="Block height query parameter")):
+                                        db: AsyncSession = Depends(get_session),
+                                        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory),
+                                        block_height: int = Query(None, description="Block height query parameter")):
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
 
@@ -208,46 +216,51 @@ async def challenge_balance_tracking_v1(network: str,
             raise HTTPException(status_code=400,
                                 detail="Missing required query parameters for Bitcoin network, required: block_height")
 
-        balance_tracking = bitcoin.BitcoinBalanceSearch()
-        output = balance_tracking.execute_bitcoin_balance_challenge(block_height)
+        balance_tracking = balance_search_factory.create_balance_search(network, db)
+        output = await balance_tracking.execute_bitcoin_balance_challenge(block_height)
 
         return {
-                "network": network,
-                "output": output,
-                }
+            "network": network,
+            "output": output,
+        }
     else:
         raise HTTPException(status_code=400, detail="Invalid network")
 
 
-@v1_router.get("/benchmark/funds_flow/{network}", summary="Benchmark query", description="Benchmark the query", tags=["v1"])
+@v1_router.get("/benchmark/funds_flow/{network}", summary="Benchmark query", description="Benchmark the query",
+               tags=["v1"])
 async def benchmark_funds_flow_v1(network: str, query: str = Query(..., description="Query to benchmark"),
-                       graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
+                                  graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
     if not is_query_only(benchmark_funds_flow_restricted_keywords, query):
         raise HTTPException(status_code=400, detail="Invalid query, restricted keywords found in query")
 
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
+
     graph_search = graph_search_factory.create_graph_search(network)
     output = graph_search.execute_benchmark_query(query)
     graph_search.close()
+
     return {
         "network": network,
         "output": output[0],
     }
 
+
 @v1_router.get("/benchmark/balance_tracking/{network}", summary="Benchmark query", description="Benchmark the query",
                tags=["v1"])
-async def benchmark_balance_tracking_v1(network: str, query: str = Query(..., description="Query to benchmark")):
+async def benchmark_balance_tracking_v1(network: str, query: str = Query(..., description="Query to benchmark"),
+                                        db: AsyncSession = Depends(get_session),
+                                        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
     if not is_query_only(benchmark_balance_tracking_restricted_keywords, query):
         raise HTTPException(status_code=400, detail="Invalid query, restricted keywords found in query")
 
     if network not in valid_networks:
         raise HTTPException(status_code=400, detail="Invalid network")
 
-    balance_search_factory = get_balance_search_factory()
-    balance_search = balance_search_factory.create_balance_search(network)
-    output = balance_search.execute_benchmark_query(query)
-    balance_search.close()
+    balance_search = balance_search_factory.create_balance_search(network, db)
+    output = await balance_search.execute_benchmark_query(query)
+
     return {
         "network": network,
         "output": output,
@@ -261,10 +274,15 @@ async def llm_query_v1(
         request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [
             {"type": 0,
              "content": "Return 3 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
+        db: AsyncSession = Depends(get_session),
         llm_factory: LLMFactory = Depends(get_llm_factory),
         graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory),
-        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
-    logger.info(f"llm query received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
+        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory),
+        graph_transformer_factory: GraphTransformerFactory = Depends(get_graph_transformer_factory),
+        chart_transformer_factory: ChartTransformerFactory = Depends(get_chart_transformer_factory),
+        tabular_transformer_factory: TabularTransformerFactory = Depends(get_tabular_transformer_factory)):
+    logger.info(
+        f"llm query received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
     output = None
     token_usage = None
     start_time = time.time()
@@ -274,18 +292,24 @@ async def llm_query_v1(
         logger.info(f"Created LLM: {llm}")
 
         # Determine the model type
-        model_type, token_usage_classification  = llm.determine_model_type(request.messages, request.llm_type, request.network)
+        model_type, token_usage_classification = llm.determine_model_type(request.messages, request.llm_type,
+                                                                          request.network)
         logger.info(f"Determined model type: {model_type}")
 
         if model_type == 'funds_flow':
-            output, token_usage_query_interpret = await handle_funds_flow_query(request, llm, graph_search_factory)
+            output, token_usage_query_interpret = await handle_funds_flow_query(
+                request, llm, graph_search_factory, graph_transformer_factory, chart_transformer_factory
+            )
         elif model_type == 'balance_tracking':
-            output, token_usage_query_interpret = await handle_balance_tracking_query(request, llm, balance_search_factory)
+            output, token_usage_query_interpret = await handle_balance_tracking_query(
+                request, llm, balance_search_factory, tabular_transformer_factory, chart_transformer_factory, db
+            )
         else:
             output = {'error': 'Unsupported model type'}
         token_usage = {
-            'completion_tokens': token_usage_classification['completion_tokens'] + token_usage_query_interpret['completion_tokens'], 
-            'prompt_tokens': token_usage_classification['prompt_tokens'] + token_usage_query_interpret['prompt_tokens'], 
+            'completion_tokens': token_usage_classification['completion_tokens'] + token_usage_query_interpret[
+                'completion_tokens'],
+            'prompt_tokens': token_usage_classification['prompt_tokens'] + token_usage_query_interpret['prompt_tokens'],
             'total_tokens': token_usage_classification['total_tokens'] + token_usage_query_interpret['total_tokens']
         }
 
@@ -314,6 +338,7 @@ async def llm_query_switch_v1(
     logger.info(f"Determined model type: {model_type}")
     return SwitchResponse(model=model_type)
 
+
 @v1_router.post("/process_prompt_funds_flow", summary="Executes user prompt",
                 description="Execute user prompt and return the result", tags=["v1"],
                 response_model=Union[List[QueryOutput], Dict])
@@ -322,8 +347,11 @@ async def llm_query_funds_flow_v1(
             {"type": 0,
              "content": "Return 3 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
-        graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory)):
-    logger.info(f"llm query funds flow received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
+        graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory),
+        graph_transformer_factory: GraphTransformerFactory = Depends(get_graph_transformer_factory),
+        chart_transformer_factory: ChartTransformerFactory = Depends(get_chart_transformer_factory)):
+    logger.info(
+        f"llm query funds flow received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
     output = None
     start_time = time.time()
 
@@ -331,7 +359,9 @@ async def llm_query_funds_flow_v1(
         llm = llm_factory.create_llm(request.llm_type)
         logger.info(f"Created LLM: {llm}")
 
-        output, token_usage = await handle_funds_flow_query(request, llm, graph_search_factory)
+        output, token_usage = await handle_funds_flow_query(
+            request, llm, graph_search_factory, graph_transformer_factory, chart_transformer_factory
+        )
 
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -351,9 +381,13 @@ async def llm_query_funds_flow_v1(
 async def llm_query_balance_tracking_v1(
         request: LLMQueryRequestV1 = Body(..., example={"llm_type": "openai", "network": "bitcoin", "messages": [
             {"type": 0, "content": "Return me address who had highest amount of BTC in 2009-01"}]}),
+        db: AsyncSession = Depends(get_session),
         llm_factory: LLMFactory = Depends(get_llm_factory),
-        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory)):
-    logger.info(f"llm query balance tracking received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
+        balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory),
+        tabular_transformer_factory: TabularTransformerFactory = Depends(get_tabular_transformer_factory),
+        chart_transformer_factory: ChartTransformerFactory = Depends(get_chart_transformer_factory)):
+    logger.info(
+        f"llm query balance tracking received: llm_type={request.llm_type}, network={request.network}, messages={request.messages}")
     output = None
     start_time = time.time()
 
@@ -361,7 +395,9 @@ async def llm_query_balance_tracking_v1(
         llm = llm_factory.create_llm(request.llm_type)
         logger.info(f"Created LLM: {llm}")
 
-        output, token_usage = await handle_balance_tracking_query(request, llm, balance_search_factory)
+        output, token_usage = await handle_balance_tracking_query(
+            request, llm, balance_search_factory, tabular_transformer_factory, chart_transformer_factory, db
+        )
 
     except Exception as e:
         logger.error(traceback.format_exc())
@@ -370,17 +406,20 @@ async def llm_query_balance_tracking_v1(
             QueryOutput(type="error", error=error_code,
                         interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
-    logger.info(f"Serving llm query balance tracking output: {output} (Total time taken: {time.time() - start_time} seconds)")
+    logger.info(
+        f"Serving llm query balance tracking output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
     return output
 
 
-async def handle_funds_flow_query(request, llm, graph_search_factory):
+async def handle_funds_flow_query(request, llm, graph_search_factory, graph_transformer_factory,
+                                  chart_transformer_factory):
     try:
         graph_search = graph_search_factory.create_graph_search(request.network)
         query_start_time = time.time()
 
-        query, token_usage_query = llm.build_cypher_query_from_messages(request.messages, request.llm_type, request.network)
+        query, token_usage_query = llm.build_cypher_query_from_messages(request.messages, request.llm_type,
+                                                                        request.network)
         query = query.strip('`')
         logger.info(f"Generated Cypher query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
@@ -388,38 +427,50 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
             error_code = LLM_ERROR_MODIFICATION_NOT_ALLOWED
             error_message = LLM_ERROR_MESSAGES[error_code]
             logger.error(f"Error {error_code}: {error_message}")
-            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
+            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {
+                'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         if query == 'invalid_prompt_error':
             error_code = LLM_ERROR_INVALID_SEARCH_PROMPT
             error_message = LLM_ERROR_MESSAGES[error_code]
             logger.error(f"Error {error_code}: {error_message}")
-            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
+            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {
+                'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         execute_query_start_time = time.time()
         result = graph_search.execute_query(query)
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
-
+        logger.info(f"Result: {result}")
         graph_search.close()
-        graph_transformed_result = bitcoin.transform_result(result)
 
+        # Use transformer for graph result
+        graph_transformer = graph_transformer_factory.create_graph_transformer(request.network)
+        graph_transformed_result = graph_transformer.transform_result(result)
+        # Use transformer for chart result
+        chart_transformer = chart_transformer_factory.create_chart_transformer(request.network)
         chart_transformed_result = None
-        if is_chart_applicable(result):
-            chart_transformed_result= convert_funds_flow_to_chart(result)
+        if chart_transformer.is_chart_applicable(result):
+            chart_transformed_result = chart_transformer.convert_funds_flow_to_chart(result)
 
         interpret_result_start_time = time.time()
-        interpreted_result, token_usage_interpret = llm.interpret_result_funds_flow(llm_messages=request.messages, result=graph_transformed_result, llm_type=request.llm_type, network=request.network)
+        interpreted_result, token_usage_interpret = llm.interpret_result_funds_flow(
+            llm_messages=request.messages,
+            result=graph_transformed_result,
+            llm_type=request.llm_type,
+            network=request.network
+        )
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
             QueryOutput(type="graph", result=graph_transformed_result, interpreted_result=interpreted_result),
-            QueryOutput(type="text", interpreted_result="interpreted_result"),
-            QueryOutput(type="table", interpreted_result="interpreted_result"),
-            QueryOutput(type="chart", result=chart_transformed_result, interpreted_result="interpreted_result")
+            QueryOutput(type="text", interpreted_result=interpreted_result),
+            QueryOutput(type="table", interpreted_result=interpreted_result),
+            QueryOutput(type="chart", result=chart_transformed_result, interpreted_result=interpreted_result)
         ]
 
         token_usage = {
-            'completion_tokens': token_usage_query.get('completion_tokens', 0) + token_usage_interpret.get('completion_tokens', 0),
+            'completion_tokens': token_usage_query.get('completion_tokens', 0) + token_usage_interpret.get(
+                'completion_tokens', 0),
             'prompt_tokens': token_usage_query.get('prompt_tokens', 0) + token_usage_interpret.get('prompt_tokens', 0),
             'total_tokens': token_usage_query.get('total_tokens', 0) + token_usage_interpret.get('total_tokens', 0)
         }
@@ -435,31 +486,37 @@ async def handle_funds_flow_query(request, llm, graph_search_factory):
     return output, token_usage
 
 
-
-async def handle_balance_tracking_query(request, llm, balance_search_factory):
+async def handle_balance_tracking_query(request, llm, balance_search_factory, tabular_transformer_factory,
+                                        chart_transformer_factory, db):
     try:
         query_start_time = time.time()
-        query, token_usage_query = llm.build_query_from_messages_balance_tracker(request.messages, request.llm_type, request.network)
+        query, token_usage_query = llm.build_query_from_messages_balance_tracker(request.messages, request.llm_type,
+                                                                                 request.network)
         logger.info(f"extracted query: {query} (Time taken: {time.time() - query_start_time} seconds)")
 
         if query in ['modification_error', 'invalid_prompt_error']:
             error_code = LLM_ERROR_MODIFICATION_NOT_ALLOWED if query == 'modification_error' else LLM_ERROR_INVALID_SEARCH_PROMPT
             error_message = LLM_ERROR_MESSAGES.get(error_code)
             logger.error(f"Error {error_code}: {error_message}")
-            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
+            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {
+                'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         execute_query_start_time = time.time()
-        balance_search = balance_search_factory.create_balance_search(request.network)
-        result = balance_search.execute_query(query)
-        balance_search.close()
+        balance_search = balance_search_factory.create_balance_search(request.network, db)
+        result = await balance_search.execute_query(query)
+        
 
         logger.info(f"Query execution time: {time.time() - execute_query_start_time} seconds")
 
-        tabular_transformed_result = bitcoin.transform_result_set(result)
+        # Use transformer for tabular result
+        tabular_transformer = tabular_transformer_factory.create_tabular_transformer(request.network)
+        tabular_transformed_result = tabular_transformer.transform_result_set(result)
 
+        # Use transformer for chart result
+        chart_transformer = chart_transformer_factory.create_chart_transformer(request.network)
         chart_transformed_result = None
-        if is_chart_applicable(result):
-            chart_transformed_result = convert_balance_tracking_to_chart(result)
+        if chart_transformer.is_chart_applicable(result):
+            chart_transformed_result = chart_transformer.convert_balance_tracking_to_chart(result)
 
         interpret_result_start_time = time.time()
         interpreted_result, token_usage_interpret = llm.interpret_result_balance_tracker(
@@ -471,14 +528,15 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory):
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
-            QueryOutput(type="graph", interpreted_result="interpreted_result"),
-            QueryOutput(type="text", interpreted_result="interpreted_result"),
+            QueryOutput(type="graph", interpreted_result=interpreted_result),
+            QueryOutput(type="text", interpreted_result=interpreted_result),
             QueryOutput(type="table", result=tabular_transformed_result, interpreted_result=interpreted_result),
             QueryOutput(type="chart", result=chart_transformed_result, interpreted_result=interpreted_result)
         ]
 
         token_usage = {
-            'completion_tokens': token_usage_query.get('completion_tokens', 0) + token_usage_interpret.get('completion_tokens', 0),
+            'completion_tokens': token_usage_query.get('completion_tokens', 0) + token_usage_interpret.get(
+                'completion_tokens', 0),
             'prompt_tokens': token_usage_query.get('prompt_tokens', 0) + token_usage_interpret.get('prompt_tokens', 0),
             'total_tokens': token_usage_query.get('total_tokens', 0) + token_usage_interpret.get('total_tokens', 0)
         }

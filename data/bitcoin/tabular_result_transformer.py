@@ -1,12 +1,17 @@
-def transform_result_set(result):
-    print(result)  # Add this line to inspect the result structure
-    if not result:
-        return [{"columns": [], "rows": []}]
+from typing import List, Dict, Any
+from data.utils.base_transformer import BaseTabularTransformer
 
-    # Dynamically generate columns based on the keys in the first result item
-    columns = [{"name": key, "label": key.title()} for key in result[0].keys()]
+class BitcoinTabularTransformer(BaseTabularTransformer):
+    @staticmethod
+    def transform_result_set(result: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        print(result)  # Log the result structure for inspection
+        if not result:
+            return [{"columns": [], "rows": []}]
 
-    # Populate the content based on the result set
-    rows = [{**item} for item in result]
+        # Dynamically generate columns based on the keys in the first result item
+        columns = [{"name": key, "label": key.title()} for key in result[0].keys()]
 
-    return [{"columns": columns, "rows": rows}]
+        # Populate the content based on the result set
+        rows = [{**item} for item in result]
+
+        return [{"columns": columns, "rows": rows}]

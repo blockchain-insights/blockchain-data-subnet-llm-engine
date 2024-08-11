@@ -1,5 +1,3 @@
 from data.bitcoin.balance_search import BitcoinBalanceSearch
 from data.bitcoin.graph_search import BitcoinGraphSearch
-from data.bitcoin.graph_result_transformer import transform_result
-from data.bitcoin.tabular_result_transformer import transform_result_set
 from data.bitcoin.query_builder import QueryBuilder
