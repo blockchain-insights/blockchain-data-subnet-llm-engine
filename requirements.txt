@@ -11,3 +11,4 @@ psycopg2-binary
 sqlalchemy
 transformers
 asyncpg
+uvicorn
