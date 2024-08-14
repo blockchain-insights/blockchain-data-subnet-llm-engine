@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 
 import __init__
 from data import bitcoin
-from data import GraphSearchFactory, BalanceSearchFactory, GraphTransformerFactory, ChartTransformerFactory, \
+from data import GraphSearchFactory, BalanceSearchFactory, GraphSummaryTransformerFactory, GraphTransformerFactory, ChartTransformerFactory, \
     TabularTransformerFactory
 from llm.factory import LLMFactory
 from typing import AsyncIterator
@@ -65,6 +65,8 @@ def get_graph_search_factory() -> GraphSearchFactory:
 def get_balance_search_factory() -> BalanceSearchFactory:
     return BalanceSearchFactory()
 
+def get_graph_summary_transformer_factory() -> GraphSummaryTransformerFactory:
+    return GraphSummaryTransformerFactory()
 
 def get_graph_transformer_factory() -> GraphTransformerFactory:
     return GraphTransformerFactory()
@@ -278,6 +280,7 @@ async def llm_query_v1(
         llm_factory: LLMFactory = Depends(get_llm_factory),
         graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory),
         balance_search_factory: BalanceSearchFactory = Depends(get_balance_search_factory),
+        graph_summary_transformer_factory: GraphSummaryTransformerFactory = Depends(get_graph_summary_transformer_factory),
         graph_transformer_factory: GraphTransformerFactory = Depends(get_graph_transformer_factory),
         chart_transformer_factory: ChartTransformerFactory = Depends(get_chart_transformer_factory),
         tabular_transformer_factory: TabularTransformerFactory = Depends(get_tabular_transformer_factory)):
@@ -298,7 +301,7 @@ async def llm_query_v1(
 
         if model_type == 'funds_flow':
             output, token_usage_query_interpret = await handle_funds_flow_query(
-                request, llm, graph_search_factory, graph_transformer_factory, chart_transformer_factory
+                request, llm, graph_search_factory, graph_summary_transformer_factory, graph_transformer_factory, chart_transformer_factory
             )
         elif model_type == 'balance_tracking':
             output, token_usage_query_interpret = await handle_balance_tracking_query(
@@ -348,6 +351,7 @@ async def llm_query_funds_flow_v1(
              "content": "Return 3 transactions outgoing from my address bc1q4s8yps9my6hun2tpd5ke5xmvgdnxcm2qspnp9r"}]}),
         llm_factory: LLMFactory = Depends(get_llm_factory),
         graph_search_factory: GraphSearchFactory = Depends(get_graph_search_factory),
+        graph_summary_transformer_factory: GraphSummaryTransformerFactory = Depends(get_graph_summary_transformer_factory),
         graph_transformer_factory: GraphTransformerFactory = Depends(get_graph_transformer_factory),
         chart_transformer_factory: ChartTransformerFactory = Depends(get_chart_transformer_factory)):
     logger.info(
@@ -360,7 +364,7 @@ async def llm_query_funds_flow_v1(
         logger.info(f"Created LLM: {llm}")
 
         output, token_usage = await handle_funds_flow_query(
-            request, llm, graph_search_factory, graph_transformer_factory, chart_transformer_factory
+            request, llm, graph_search_factory, graph_summary_transformer_factory, graph_transformer_factory, chart_transformer_factory
         )
 
     except Exception as e:
@@ -412,7 +416,7 @@ async def llm_query_balance_tracking_v1(
     return output
 
 
-async def handle_funds_flow_query(request, llm, graph_search_factory, graph_transformer_factory,
+async def handle_funds_flow_query(request, llm, graph_search_factory, graph_summary_transformer_factory, graph_transformer_factory,
                                   chart_transformer_factory):
     try:
         graph_search = graph_search_factory.create_graph_search(request.network)
@@ -445,7 +449,10 @@ async def handle_funds_flow_query(request, llm, graph_search_factory, graph_tran
 
         # Use transformer for graph result
         graph_transformer = graph_transformer_factory.create_graph_transformer(request.network)
+        graph_summary_transformer = graph_summary_transformer_factory.create_graph_summary_transformer(request.network)
         graph_transformed_result = graph_transformer.transform_result(result)
+        graph_summary_result = graph_summary_transformer.transform_result(result)
+        logger.info(f"Summary Result: {graph_summary_result}")
         # Use transformer for chart result
         chart_transformer = chart_transformer_factory.create_chart_transformer(request.network)
         chart_transformed_result = None
@@ -455,7 +462,7 @@ async def handle_funds_flow_query(request, llm, graph_search_factory, graph_tran
         interpret_result_start_time = time.time()
         interpreted_result, token_usage_interpret = llm.interpret_result_funds_flow(
             llm_messages=request.messages,
-            result=graph_transformed_result,
+            result=graph_summary_result,
             llm_type=request.llm_type,
             network=request.network
         )

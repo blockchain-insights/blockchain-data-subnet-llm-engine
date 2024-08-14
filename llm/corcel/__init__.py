@@ -71,7 +71,8 @@ class CorcelLLM(BaseLLM):
         question = "\n".join([message.content for message in llm_messages])
 
         try:
-            ai_response, token_usage = self.corcel_client.send_prompt(model="gpt-4o", prompt=prompt, question=question, result=result)
+            ai_response, token_usage = self.corcel_client.send_prompt(model="gpt-4o", prompt=prompt, result=result)
+            ai_response = ai_response.strip('"')
             return ai_response, token_usage
         except Exception as e:
             logger.error(f"LlmQuery interpret result error: {e}")

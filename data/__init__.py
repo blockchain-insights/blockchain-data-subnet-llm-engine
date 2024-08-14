@@ -5,9 +5,11 @@ from data.bitcoin.balance_search import BitcoinBalanceSearch
 from data.bitcoin.chart_result_transformer import BitcoinChartTransformer
 from data.bitcoin.graph_result_transformer import BitcoinGraphTransformer
 from data.bitcoin.tabular_result_transformer import BitcoinTabularTransformer
+from data.bitcoin.graph_summary_transformer import BitcoinGraphSummaryTransformer
 from data.utils.base_transformer import BaseChartTransformer
 from data.utils.base_transformer import BaseGraphTransformer
 from data.utils.base_transformer import BaseTabularTransformer
+from data.utils.base_transformer import BaseGraphSummaryTransformer
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -70,6 +72,19 @@ class TabularTransformerFactory:
     def create_tabular_transformer(cls, network: str) -> BaseTabularTransformer:
         transformer_class = {
             NETWORK_BITCOIN: BitcoinTabularTransformer,
+            # Add other networks and their corresponding classes as needed
+        }.get(network)
+
+        if transformer_class is None:
+            raise ValueError(f"Unsupported network type: {network}")
+
+        return transformer_class()
+
+class GraphSummaryTransformerFactory:
+    @classmethod
+    def create_graph_summary_transformer(cls, network: str) -> BaseGraphSummaryTransformer:
+        transformer_class = {
+            "bitcoin": BitcoinGraphSummaryTransformer,
             # Add other networks and their corresponding classes as needed
         }.get(network)
 

@@ -38,7 +38,25 @@ class BitcoinGraphSearch(BaseGraphSearch):
             result = session.run(cypher_query)
             if not result:
                 return None
-            return result.data()
+
+            results_data = []
+            for record in result:
+                # Extract nodes and relationships from the record
+                a1 = record['a1']
+                t1 = record['t1']
+                a2 = record['a2']
+                s1 = record['s1']
+                s2 = record['s2']
+
+                results_data.append({
+                    'a1': a1,
+                    't1': t1,
+                    'a2': a2,
+                    's1': dict(s1),
+                    's2': dict(s2)
+                })
+
+            return results_data
 
     def get_min_max_block_height_cache(self):
         with self.driver.session() as session:

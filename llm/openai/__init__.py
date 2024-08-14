@@ -193,6 +193,7 @@ class OpenAILLM(BaseLLM):
         # Use string.format to safely substitute the result into the prompt
         try:
             full_prompt = prompt.format(result=result_str)
+            logger.error(f"Full prompt: {full_prompt}")
         except KeyError as e:
             logger.error(f"KeyError during prompt formatting: {e}")
             logger.error(f"Prompt: {prompt}")
@@ -201,11 +202,11 @@ class OpenAILLM(BaseLLM):
 
         # Prepare the messages
         messages = [SystemMessage(content=full_prompt)]
-        for llm_message in llm_messages:
-            if llm_message.type == LLM_MESSAGE_TYPE_USER:
-                messages.append(HumanMessage(content=llm_message.content))
-            else:
-                messages.append(AIMessage(content=llm_message.content))
+        # for llm_message in llm_messages:
+        #    if llm_message.type == LLM_MESSAGE_TYPE_USER:
+        #        messages.append(HumanMessage(content=llm_message.content))
+        #    else:
+        #        messages.append(AIMessage(content=llm_message.content))
         try:
             message_chunks = split_messages_into_chunks(messages)
             ai_responses = []
