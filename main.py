@@ -469,10 +469,8 @@ async def handle_funds_flow_query(request, llm, graph_search_factory, graph_summ
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
-            QueryOutput(type="graph", result=graph_transformed_result, interpreted_result=interpreted_result),
-            QueryOutput(type="text", interpreted_result=interpreted_result),
-            QueryOutput(type="table", interpreted_result=interpreted_result),
-            QueryOutput(type="chart", result=chart_transformed_result, interpreted_result=interpreted_result)
+            QueryOutput(type="graph", result=graph_transformed_result),
+            QueryOutput(type="text", result=interpreted_result)
         ]
 
         token_usage = {
@@ -535,10 +533,8 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory, ta
         logger.info(f"Result interpretation time: {time.time() - interpret_result_start_time} seconds")
 
         output = [
-            QueryOutput(type="graph", interpreted_result=interpreted_result),
-            QueryOutput(type="text", interpreted_result=interpreted_result),
-            QueryOutput(type="table", result=tabular_transformed_result, interpreted_result=interpreted_result),
-            QueryOutput(type="chart", result=chart_transformed_result, interpreted_result=interpreted_result)
+            QueryOutput(type="text", result=interpreted_result),
+            QueryOutput(type="table", result=tabular_transformed_result)
         ]
 
         token_usage = {
