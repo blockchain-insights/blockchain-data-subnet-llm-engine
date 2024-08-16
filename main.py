@@ -321,7 +321,7 @@ async def llm_query_v1(
         error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         output = [
             QueryOutput(type="error", error=error_code,
-                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+                        result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     logger.info(f"Serving miner llm query output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
@@ -372,7 +372,7 @@ async def llm_query_funds_flow_v1(
         error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         output = [
             QueryOutput(type="error", error=error_code,
-                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+                        result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     logger.info(f"Serving llm query funds flow output: {output} (Total time taken: {time.time() - start_time} seconds)")
 
@@ -408,7 +408,7 @@ async def llm_query_balance_tracking_v1(
         error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         output = [
             QueryOutput(type="error", error=error_code,
-                        interpreted_result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
+                        result=LLM_ERROR_MESSAGES.get(error_code, 'An error occurred'))]
 
     logger.info(
         f"Serving llm query balance tracking output: {output} (Total time taken: {time.time() - start_time} seconds)")
@@ -431,14 +431,14 @@ async def handle_funds_flow_query(request, llm, graph_search_factory, graph_summ
             error_code = LLM_ERROR_MODIFICATION_NOT_ALLOWED
             error_message = LLM_ERROR_MESSAGES[error_code]
             logger.error(f"Error {error_code}: {error_message}")
-            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {
+            return [{'type': 'error', 'result': error_message, 'error': error_code}], {
                 'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         if query == 'invalid_prompt_error':
             error_code = LLM_ERROR_INVALID_SEARCH_PROMPT
             error_message = LLM_ERROR_MESSAGES[error_code]
             logger.error(f"Error {error_code}: {error_message}")
-            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {
+            return [{'type': 'error', 'result': error_message, 'error': error_code}], {
                 'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         execute_query_start_time = time.time()
@@ -484,7 +484,7 @@ async def handle_funds_flow_query(request, llm, graph_search_factory, graph_summ
         error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         error_message = LLM_ERROR_MESSAGES.get(error_code, 'An unknown error occurred')
         output = [
-            QueryOutput(type="error", error=error_code, interpreted_result=error_message)
+            QueryOutput(type="error", error=error_code, result=error_message)
         ]
         token_usage = {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
@@ -503,7 +503,7 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory, ta
             error_code = LLM_ERROR_MODIFICATION_NOT_ALLOWED if query == 'modification_error' else LLM_ERROR_INVALID_SEARCH_PROMPT
             error_message = LLM_ERROR_MESSAGES.get(error_code)
             logger.error(f"Error {error_code}: {error_message}")
-            return [{'type': 'error', 'result': None, 'interpreted_result': error_message, 'error': error_code}], {
+            return [{'type': 'error', 'result': error_message, 'error': error_code}], {
                 'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
         execute_query_start_time = time.time()
@@ -548,7 +548,7 @@ async def handle_balance_tracking_query(request, llm, balance_search_factory, ta
         error_code = e.args[0] if len(e.args) > 0 and isinstance(e.args[0], int) else LLM_UNKNOWN_ERROR
         error_message = LLM_ERROR_MESSAGES.get(error_code, 'An error occurred')
         output = [
-            QueryOutput(type="error", error=error_code, interpreted_result=error_message)
+            QueryOutput(type="error", error=error_code, result=error_message)
         ]
         token_usage = {'completion_tokens': 0, 'prompt_tokens': 0, 'total_tokens': 0}
 
